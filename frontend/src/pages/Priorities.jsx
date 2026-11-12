@@ -17,15 +17,16 @@ import {
   Database, 
   Bolt, 
   TrendingDown, 
-  ArrowRight,
-  Filter,
-  Calendar,
-  Code2,
-  Clock,
-  Target,
-  Wand2,
-  Compass,
-  Sliders
+  ArrowRight, 
+  Filter, 
+  Calendar, 
+  Code2, 
+  Clock, 
+  Target, 
+  Wand2, 
+  Compass, 
+  Sliders,
+  Bot
 } from 'lucide-react';
 
 export default function Priorities() {
@@ -384,6 +385,14 @@ export default function Priorities() {
 
                 <div className="flex items-center justify-end gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
                   <button
+                    onClick={() => navigate(`/copilot?query=${encodeURIComponent(`Why is ${fileName} ranked #${idx + 1}? Explain the 5D formula breakdown.`)}`)}
+                    className="px-2 py-1 bg-white hover:bg-[#f0ecfc] text-[#5b42a5] rounded text-xs font-semibold transition flex items-center gap-1 border border-[#e2e4ea] cursor-pointer"
+                    title="Explain with Copilot"
+                  >
+                    <Bot className="w-3 h-3 text-[#7048e8]" />
+                    <span>Why #{idx + 1}?</span>
+                  </button>
+                  <button
                     onClick={() => openSingleJira(item)}
                     className="px-2 py-1 bg-white hover:bg-[#f0ecfc] text-[#5b42a5] rounded text-xs font-semibold transition flex items-center gap-1 border border-[#e2e4ea] cursor-pointer"
                   >
@@ -470,6 +479,14 @@ export default function Priorities() {
                     </td>
                     <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => navigate(`/copilot?query=${encodeURIComponent(`Why is ${fileName} ranked #${idx + 1}? Explain the 5D formula breakdown.`)}`)}
+                          className="px-2.5 py-1 bg-white hover:bg-[#f0ecfc] text-[#5b42a5] rounded text-xs font-semibold transition flex items-center gap-1 border border-[#e2e4ea] cursor-pointer"
+                          title="Ask Copilot why this item is ranked here"
+                        >
+                          <Bot className="w-3.5 h-3.5 text-[#7048e8]" />
+                          <span>Why #{idx + 1}?</span>
+                        </button>
                         <button
                           onClick={() => openSingleJira(item)}
                           className="px-2.5 py-1 bg-white hover:bg-[#f0ecfc] text-[#5b42a5] rounded text-xs font-semibold transition flex items-center gap-1 border border-[#e2e4ea] cursor-pointer"

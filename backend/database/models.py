@@ -296,3 +296,33 @@ class AnalysisJob(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
+
+class CopilotConversation(Base):
+    __tablename__ = "copilot_conversations"
+
+    id = Column(String(100), primary_key=True, index=True)  # conv_<uuid>
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, default="ws_demo", index=True)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
+    title = Column(String(255), default="New Copilot Session")
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    messages = relationship("CopilotMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="CopilotMessage.created_at")
+
+
+class CopilotMessage(Base):
+    __tablename__ = "copilot_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    conversation_id = Column(String(100), ForeignKey("copilot_conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(30), nullable=False)  # user, assistant, system, tool
+    content = Column(Text, nullable=False)
+    citations_json = Column(Text, nullable=True)  # JSON list of citations
+    tool_calls_json = Column(Text, nullable=True)  # JSON list of tool executions
+    refactor_diff = Column(Text, nullable=True)  # Verified before/after AST diff
+    created_at = Column(DateTime, default=utc_now)
+
+    conversation = relationship("CopilotConversation", back_populates="messages")
+
+

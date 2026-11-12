@@ -1,70 +1,247 @@
 """
-Copilot API Routes: Interactive AST Engineering & Refactoring Copilot
+AI Copilot API Routes.
+Provides streaming SSE chat endpoint, tenant-scoped tool calling,
+and conversation persistence.
 """
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+import uuid
+import json
+import logging
 from typing import Optional, Dict, Any, List
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from backend.database.connection import get_db
+from backend.database.tenant import get_current_user, get_current_workspace
+from backend.database.models import User, Workspace, CopilotConversation, CopilotMessage, SourceFile
+from backend.services.copilot_tools import CopilotToolRegistry
+from backend.services.copilot_llm import get_copilot_llm, CopilotStreamEvent
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/copilot", tags=["AI Copilot & AST Refactoring"])
 
-class ChatRequest(BaseModel):
-    message: str
-    context: Optional[Dict[str, Any]] = None
 
-@router.post("/chat")
-def chat_copilot(payload: ChatRequest):
-    q = payload.message.lower()
-    
-    if "god" in q or "hotspot" in q:
-        reply = (
-            "🔥 **Top God-Classes Identified**:\n\n"
-            "1. `services/auth/token_provider.py` (Complexity: 38, LOC: 840, Risk Score: 89.2)\n"
-            "2. `pipeline/analytics/spark_aggregator.py` (Complexity: 34, LOC: 1,240, Risk Score: 84.6)\n"
-            "3. `api/routes/transaction_billing.py` (Complexity: 31, LOC: 760, Risk Score: 79.1)\n\n"
-            "👉 *Recommendation*: Decompose `token_provider.py` into separate token generator and cryptographic validator routines to reduce cyclomatic depth by ~62%."
+class ChatMessagePayload(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+    repository_id: Optional[int] = None
+    stream: bool = True
+
+
+class ConversationSummary(BaseModel):
+    id: str
+    workspace_id: str
+    title: str
+    repository_id: Optional[int]
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+@router.post("/chat", summary="Interactive Grounded Copilot Chat (SSE Streaming)")
+async def chat_copilot(
+    payload: ChatMessagePayload,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+    workspace: Optional[Workspace] = Depends(get_current_workspace),
+):
+    """
+    Primary Copilot Chat endpoint with Server-Sent Events (SSE) streaming.
+    Workspace ID and Repository ID are enforced from user session, ensuring tenant isolation.
+    """
+    workspace_id = workspace.id if workspace else "ws_demo"
+    user_id = user.id if user else "usr_lead_01"
+    repo_id = payload.repository_id
+
+    # If repo_id not passed, pick first active repository in workspace
+    if not repo_id:
+        first_file = db.query(SourceFile).filter(SourceFile.workspace_id == workspace_id).first()
+        repo_id = first_file.repository_id if first_file else 1
+
+    # 1. Resolve or Create Conversation
+    conv = None
+    if payload.conversation_id:
+        conv = db.query(CopilotConversation).filter(
+            CopilotConversation.id == payload.conversation_id,
+            CopilotConversation.workspace_id == workspace_id,
+        ).first()
+
+    if not conv:
+        conv_id = f"conv_{uuid.uuid4().hex[:12]}"
+        conv = CopilotConversation(
+            id=conv_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            repository_id=repo_id,
+            title=payload.message[:60] if payload.message else "Copilot Session",
         )
-    elif "5d" in q or "formula" in q or "roi" in q or "quick win" in q:
-        reply = (
-            "📐 **5D Prioritization Decision Engine**:\n\n"
-            "$$PS_{base} = 0.35 \\cdot TR + 0.30 \\cdot BI + 0.15 \\cdot U + 0.10 \\cdot MC + 0.10 \\cdot DA$$\n"
-            "$$PS_{final} = \\text{clamp}(0.85 \\cdot PS_{base} + 0.15 \\cdot (100 - \\text{Effort}), 0, 100)$$\n\n"
-            "⭐ **Quick Wins Quadrant**: Modules with High Business Impact (≥ 5.0) and Low Remediation Effort (≤ 40h) yield an estimated **3.4x ROI** in recovered velocity."
-        )
-    elif "model" in q or "random forest" in q or "r2" in q or "predict" in q:
-        reply = (
-            "🤖 **Supervised Random Forest Regressor Benchmarks**:\n\n"
-            "- **Trees**: 300 Decision Trees (Max Depth 12)\n"
-            "- **Performance**: $R^2 = 0.9885$, 5-Fold Cross-Validation $R^2 = 0.9849$\n"
-            "- **MAE**: 1.0855 LOC/Defect\n"
-            "- **Key Drivers**: Cyclomatic Complexity (34%), Commit Churn (28%), LOC (22%), Author Entropy (16%)."
-        )
-    elif "auth" in q or "token_provider" in q:
-        reply = (
-            "🛡️ **Risk Analysis for `services/auth/token_provider.py`**:\n\n"
-            "- **Technical Risk**: 89.2 / 100 (Critical)\n"
-            "- **Cyclomatic Complexity**: 38 (God-Method `validate_and_refresh_token`)\n"
-            "- **Churn (30d)**: 480 LOC across 4 contributors\n"
-            "- **Defect Exposure**: 82.4% predicted bug likelihood\n\n"
-            "```python\n"
-            "- def validate_and_refresh_token(raw_jwt, secret_key, session_store):\n"
-            "-     # 140 lines of intertwined signature check, DB query, claims decode\n"
-            "+ def validate_token_signature(token: str, key: str) -> Claims:\n"
-            "+     return CryptoEngine.verify_rsa_pss(token, key)\n"
-            "+ def refresh_session_claims(claims: Claims, store: SessionStore) -> Session:\n"
-            "+     return store.renew_lease(claims.sub)\n"
-            "```\n\n"
-            "✨ *Refactoring Impact*: Reduces cyclomatic depth by 64% and cuts estimated bug probability to <12%."
-        )
+        db.add(conv)
+        db.commit()
     else:
-        reply = (
-            f"💡 **Analysis for query**: \"{payload.message}\"\n\n"
-            "Our AST telemetry model indicates healthy system status across 42/48 microservices (94.2% health). "
-            "18 Quick Win refactorings are ready for Jira sprint export, saving an estimated **340 engineering hours** ($48.2k runway)."
+        conv_id = conv.id
+
+    # 2. Persist User Message
+    user_msg = CopilotMessage(
+        conversation_id=conv_id,
+        role="user",
+        content=payload.message,
+    )
+    db.add(user_msg)
+    db.commit()
+
+    # 3. Build Conversation History Context
+    prev_messages = db.query(CopilotMessage).filter(
+        CopilotMessage.conversation_id == conv_id
+    ).order_by(CopilotMessage.created_at.asc()).all()
+
+    history = [{"role": m.role, "content": m.content} for m in prev_messages]
+
+    # 4. Initialize Tenant-Scoped Tool Registry
+    tool_registry = CopilotToolRegistry(db=db, workspace_id=workspace_id, repository_id=repo_id)
+    llm = get_copilot_llm()
+
+    async def event_generator():
+        yield f"data: {json.dumps({'type': 'init', 'data': {'conversation_id': conv_id}})}\n\n"
+
+        assistant_tokens = []
+        citations = []
+        tool_calls = []
+        refactor_diff = None
+
+        try:
+            async for ev in llm.stream_chat(history, tool_registry):
+                if ev.event_type == "token":
+                    assistant_tokens.append(ev.data)
+                elif ev.event_type == "citation":
+                    citations.append(ev.data)
+                elif ev.event_type == "tool_call":
+                    tool_calls.append(ev.data)
+                elif ev.event_type == "refactor_diff":
+                    refactor_diff = ev.data
+
+                yield ev.to_sse()
+
+            # Save assistant message
+            full_reply = "".join(assistant_tokens)
+            asst_msg = CopilotMessage(
+                conversation_id=conv_id,
+                role="assistant",
+                content=full_reply,
+                citations_json=json.dumps(citations) if citations else None,
+                tool_calls_json=json.dumps(tool_calls) if tool_calls else None,
+                refactor_diff=json.dumps(refactor_diff) if refactor_diff else None,
+            )
+            db.add(asst_msg)
+            db.commit()
+
+        except Exception as e:
+            logger.exception("Error during Copilot stream: %s", e)
+            err_ev = CopilotStreamEvent("error", f"Copilot execution failure: {str(e)}")
+            yield err_ev.to_sse()
+
+    if payload.stream:
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
+
+    # Non-streaming response for synchronous legacy clients
+    reply_tokens = []
+    cits = []
+    t_calls = []
+    r_diff = None
+
+    async for ev in llm.stream_chat(history, tool_registry):
+        if ev.event_type == "token":
+            reply_tokens.append(ev.data)
+        elif ev.event_type == "citation":
+            cits.append(ev.data)
+        elif ev.event_type == "tool_call":
+            t_calls.append(ev.data)
+        elif ev.event_type == "refactor_diff":
+            r_diff = ev.data
+
+    full_text = "".join(reply_tokens)
+    asst_msg = CopilotMessage(
+        conversation_id=conv_id,
+        role="assistant",
+        content=full_text,
+        citations_json=json.dumps(cits) if cits else None,
+        tool_calls_json=json.dumps(t_calls) if t_calls else None,
+        refactor_diff=json.dumps(r_diff) if r_diff else None,
+    )
+    db.add(asst_msg)
+    db.commit()
 
     return {
         "status": "success",
-        "reply": reply,
-        "suggested_actions": ["Inspect Hotspots", "Export to Jira", "Run What-If Simulation"]
+        "conversation_id": conv_id,
+        "reply": full_text,
+        "citations": cits,
+        "tool_calls": t_calls,
+        "refactor_diff": r_diff,
+        "suggested_actions": ["Inspect Hotspots", "Explain Score", "Propose Refactor"],
     }
+
+
+@router.get("/conversations", summary="List Workspace Copilot Conversations")
+def list_conversations(
+    db: Session = Depends(get_db),
+    workspace: Optional[Workspace] = Depends(get_current_workspace),
+):
+    workspace_id = workspace.id if workspace else "ws_demo"
+    convs = db.query(CopilotConversation).filter(
+        CopilotConversation.workspace_id == workspace_id
+    ).order_by(CopilotConversation.updated_at.desc()).all()
+
+    return [
+        {
+            "id": c.id,
+            "workspace_id": c.workspace_id,
+            "title": c.title,
+            "repository_id": c.repository_id,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+            "message_count": len(c.messages),
+        }
+        for c in convs
+    ]
+
+
+@router.get("/conversations/{conversation_id}/messages", summary="Get Conversation Message History")
+def get_conversation_messages(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    workspace: Optional[Workspace] = Depends(get_current_workspace),
+):
+    workspace_id = workspace.id if workspace else "ws_demo"
+    conv = db.query(CopilotConversation).filter(
+        CopilotConversation.id == conversation_id,
+        CopilotConversation.workspace_id == workspace_id,
+    ).first()
+
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation '{conversation_id}' not found in current workspace.",
+        )
+
+    return [
+        {
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "citations": json.loads(m.citations_json) if m.citations_json else [],
+            "tool_calls": json.loads(m.tool_calls_json) if m.tool_calls_json else [],
+            "refactor_diff": json.loads(m.refactor_diff) if m.refactor_diff else None,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in conv.messages
+    ]

@@ -72,8 +72,8 @@ class PriorityService:
 
         # Final Priority Score accounting for remediation effort (higher ROI gives boost, high effort gives gentle damping)
         final_score = (
-            (1.0 - settings.WEIGHT_REMEDIATION_EFFORT) * baseline_score +
-            settings.WEIGHT_REMEDIATION_EFFORT * (100.0 - effort)
+            (1.0 - settings.EFFORT_BLEND_WEIGHT) * baseline_score +
+            settings.EFFORT_BLEND_WEIGHT * (100.0 - effort)
         )
         final_score = max(0.0, min(100.0, final_score))
 
@@ -240,7 +240,7 @@ class PriorityService:
             normalized_debt_age=round(norm_age, 2),
             baseline_priority_score=score.baseline_score,
             remediation_effort_factor=round(effort, 2),
-            effort_deduction_or_boost=round((100.0 - effort) * settings.WEIGHT_REMEDIATION_EFFORT, 2),
+            effort_deduction_or_boost=round((100.0 - effort) * settings.EFFORT_BLEND_WEIGHT, 2),
         )
 
         debt_list = [

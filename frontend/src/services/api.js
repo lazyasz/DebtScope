@@ -16,6 +16,7 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 5000,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,  // send httpOnly session cookie on all requests
 });
 
 export const USE_REAL_API = true;
@@ -582,8 +583,41 @@ export async function disconnectProvider(provider) {
   }
 }
 
+// ── Auth API helpers (P1) ─────────────────────────────────────────────────────
+
+/**
+ * Get the current authenticated user and sandbox_mode flag.
+ * Uses httpOnly session cookie (credentials: 'include').
+ * Returns null if unauthenticated.
+ */
+export async function getMe() {
+  try {
+    const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+    if (!res.ok) return null;
+    return res.json();
+  } catch (err) {
+    console.warn('[API] /auth/me failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Log out — clears the httpOnly session cookie server-side.
+ */
+export async function logout() {
+  try {
+    await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (err) {
+    console.warn('[API] logout failed:', err.message);
+  }
+}
+
 export { apiClient };
 export default apiClient;
 
-
+// TODO P1→P2: Remove silent mock fallback once real analysis endpoints are live.
+// The mock fallback in each function above is intentional until P2 real analysis.
 

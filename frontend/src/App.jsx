@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
+import SandboxBanner from './components/layout/SandboxBanner';
 import LenisSmoothScroll from './components/ui/LenisSmoothScroll';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import TechnicalDebt from './pages/TechnicalDebt';
 import Predictions from './pages/Predictions';
@@ -17,10 +19,13 @@ import IntegrationsHub from './pages/IntegrationsHub';
 export default function App() {
   return (
     <AuthProvider>
+      {/* Sandbox banner renders at the very top — visible on all pages */}
+      <SandboxBanner />
       <LenisSmoothScroll>
         <BrowserRouter>
           <Routes>
-            {/* OAuth Callback Fragment Handler */}
+            {/* Auth routes */}
+            <Route path="/login" element={<Login />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Main App Layout */}
@@ -43,4 +48,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-

@@ -1,6 +1,7 @@
 """
 Seed Service: Initializes a realistic demo codebase dataset.
 Provides the benchmark comparison dataset demonstrating Business-Aware Prioritization.
+All demo data lives in workspace ws_demo (Demo Workspace).
 """
 
 from sqlalchemy.orm import Session
@@ -11,23 +12,96 @@ from backend.database.models import (
     TechnicalDebtItem,
     MLPrediction,
     BusinessContext,
+    User,
+    Workspace,
+    WorkspaceMembership,
 )
 from backend.services.priority_service import PriorityService
 from backend.services.recommendation_service import RecommendationService
 
+DEMO_WORKSPACE_ID = "ws_demo"
+SYSTEM_USER_ID = "usr_system"
+DEMO_USER_ID = "usr_lead_01"
+
+
+def ensure_demo_workspace(db: Session) -> Workspace:
+    """
+    Idempotently creates the system user, demo workspace, demo user (Dhruv),
+    and the workspace membership. Safe to call on every startup.
+    Returns the ws_demo Workspace.
+    """
+    # 1. System user (workspace owner for bootstrap)
+    sys_user = db.query(User).filter(User.id == SYSTEM_USER_ID).first()
+    if not sys_user:
+        sys_user = User(
+            id=SYSTEM_USER_ID,
+            email="system@debtscope.local",
+            full_name="DebtScope System",
+            is_active=True,
+        )
+        db.add(sys_user)
+        db.commit()
+
+    # 2. Demo workspace
+    ws = db.query(Workspace).filter(Workspace.id == DEMO_WORKSPACE_ID).first()
+    if not ws:
+        ws = Workspace(
+            id=DEMO_WORKSPACE_ID,
+            name="Demo Workspace",
+            slug="demo",
+            owner_id=SYSTEM_USER_ID,
+            is_demo=True,
+        )
+        db.add(ws)
+        db.commit()
+
+    # 3. Demo user (Dhruv / lead architect)
+    demo_user = db.query(User).filter(User.id == DEMO_USER_ID).first()
+    if not demo_user:
+        demo_user = User(
+            id=DEMO_USER_ID,
+            email="dhruv.lead@engineering.org",
+            full_name="Dhruv Patel",
+            avatar_url="https://ui-avatars.com/api/?name=Dhruv+Patel&background=43562b&color=ffffff",
+            is_active=True,
+        )
+        db.add(demo_user)
+        db.commit()
+
+    # 4. Membership
+    mem = db.query(WorkspaceMembership).filter(
+        WorkspaceMembership.user_id == DEMO_USER_ID,
+        WorkspaceMembership.workspace_id == DEMO_WORKSPACE_ID,
+    ).first()
+    if not mem:
+        mem = WorkspaceMembership(
+            user_id=DEMO_USER_ID,
+            workspace_id=DEMO_WORKSPACE_ID,
+            role="owner",
+        )
+        db.add(mem)
+        db.commit()
+
+    return ws
+
+
 
 def seed_database(db: Session, include_benchmark: bool = False) -> None:
-    """Seeds the database with realistic microservice files and metrics."""
-    # Check if already seeded
-    existing_repo = db.query(Repository).filter(Repository.name == "ecommerce-core-platform").first()
+    """Seeds the database with realistic microservice files and metrics in ws_demo."""
+    # Check if already seeded (scoped to ws_demo)
+    existing_repo = db.query(Repository).filter(
+        Repository.name == "ecommerce-core-platform",
+        Repository.workspace_id == DEMO_WORKSPACE_ID,
+    ).first()
     if existing_repo:
         return
 
-    # 1. Create Demo Repository
+    # 1. Create Demo Repository (scoped to ws_demo)
     repo = Repository(
         name="ecommerce-core-platform",
         url="https://github.com/enterprise/ecommerce-core-platform.git",
         default_branch="main",
+        workspace_id=DEMO_WORKSPACE_ID,
     )
     db.add(repo)
     db.commit()
@@ -311,6 +385,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
             language=item["language"],
             lines_of_code=item["loc"],
             is_active=True,
+            workspace_id=DEMO_WORKSPACE_ID,
         )
         db.add(file_obj)
         db.commit()
@@ -328,6 +403,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
             code_churn_commits=m["code_churn_commits"],
             bug_frequency=m["bug_frequency"],
             technical_risk_score=m["technical_risk_score"],
+            workspace_id=DEMO_WORKSPACE_ID,
         )
         db.add(metric_obj)
 
@@ -340,6 +416,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
             churn_risk_score=p["churn_risk_score"],
             confidence_score=p["confidence_score"],
             model_version=p["model_version"],
+            workspace_id=DEMO_WORKSPACE_ID,
         )
         db.add(pred_obj)
 
@@ -355,6 +432,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
             maintenance_cost=b["maintenance_cost"],
             estimated_remediation_effort=b["estimated_remediation_effort"],
             domain_tag=b["domain_tag"],
+            workspace_id=DEMO_WORKSPACE_ID,
         )
         db.add(bctx_obj)
 
@@ -368,6 +446,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
                 description=d["description"],
                 line_number=d["line_number"],
                 remediation_guidance=d["remediation"],
+                workspace_id=DEMO_WORKSPACE_ID,
             )
             db.add(debt_item)
 

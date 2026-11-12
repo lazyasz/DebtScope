@@ -1,11 +1,21 @@
 """
 Configuration module for Predictive Engineering Intelligence Platform.
 Loads environment variables and provides centralized application settings.
+
+Five-Weight Formula (viva-locked, sum = 1.00):
+  w_TR = 0.35  (Technical Risk)
+  w_BI = 0.30  (Business Impact)
+  w_U  = 0.15  (Release Urgency)
+  w_M  = 0.10  (Maintenance Cost)
+  w_A  = 0.10  (Debt Age)
+
+Stage-6 Effort Blend (separate post-processing step, NOT a 6th weight):
+  w_E  = 0.15  → adjusts PS_base → PS_final; does NOT enter the 5D formula
 """
 
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, model_validator
 
 
 class Settings(BaseSettings):
@@ -19,7 +29,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    # Database Configuration (SQLite default for MVP, PostgreSQL ready)
+    # Database Configuration (SQLite default for dev, PostgreSQL for production)
     DATABASE_URL: str = "sqlite:///./tech_debt_intelligence.db"
 
     # Security & CORS
@@ -36,20 +46,34 @@ class Settings(BaseSettings):
         "*"
     ]
 
-    # Priority Engine Weights (Configurable MVP defaults)
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    # DEV_SANDBOX_AUTH: bypass real Google OAuth for local/test use only.
+    # MUST be False in production — a RuntimeError is raised if set True with
+    # ENVIRONMENT=production.
+    DEV_SANDBOX_AUTH: bool = False
+
+    # Session cookie
+    SESSION_COOKIE_NAME: str = "debtscope_session"
+    SESSION_MAX_AGE_SECONDS: int = 28800  # 8 hours
+
+    # Token encryption for integration OAuth tokens at rest (Fernet key, base64url)
+    # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    TOKEN_ENCRYPTION_KEY: str = ""
+
+    # ── Priority Engine Weights — 5D Formula (sum = 1.00, viva-locked) ───────
     WEIGHT_TECHNICAL_RISK: float = Field(default=0.35, ge=0.0, le=1.0)
     WEIGHT_BUSINESS_IMPACT: float = Field(default=0.30, ge=0.0, le=1.0)
     WEIGHT_RELEASE_URGENCY: float = Field(default=0.15, ge=0.0, le=1.0)
     WEIGHT_MAINTENANCE_COST: float = Field(default=0.10, ge=0.0, le=1.0)
     WEIGHT_DEBT_AGE: float = Field(default=0.10, ge=0.0, le=1.0)
 
-    # Remediation Effort Impact Weight in Final Score
-    WEIGHT_REMEDIATION_EFFORT: float = Field(default=0.15, ge=0.0, le=1.0)
+    # Stage-6 effort blend (post-processing ONLY — NOT one of the five weights)
+    EFFORT_BLEND_WEIGHT: float = Field(default=0.15, ge=0.0, le=1.0)
 
     # Production & Deployment Settings
     FRONTEND_URL: str = "http://localhost:5173"
     JWT_SECRET: str = "pei-jwt-secret-key-production-2026"
-    SANDBOX_MODE: bool = False
+    SANDBOX_MODE: bool = False  # Legacy alias — prefer DEV_SANDBOX_AUTH
 
     # Integrations: Google OAuth (Server-Side Authorization Code Flow)
     GOOGLE_CLIENT_ID: str = ""
@@ -57,6 +81,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # Integrations: GitHub App & OAuth
+    GITHUB_TOKEN: str = ""
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
     GITHUB_APP_ID: str = ""
@@ -65,7 +90,7 @@ class Settings(BaseSettings):
     # Integrations: Atlassian Jira Cloud (OAuth 2.0 3LO & REST API)
     JIRA_CLIENT_ID: str = ""
     JIRA_CLIENT_SECRET: str = ""
-    JIRA_REDIRECT_URI: str = "http://localhost:5173/auth/callback"
+    JIRA_REDIRECT_URI: str = "http://localhost:5173/auth/jira/callback"
     JIRA_BASE_URL: str = ""
     JIRA_DOMAIN: str = ""
     JIRA_EMAIL: str = ""
@@ -75,9 +100,19 @@ class Settings(BaseSettings):
     # Integrations: Notion (OAuth 2.0 & REST API v1)
     NOTION_CLIENT_ID: str = ""
     NOTION_CLIENT_SECRET: str = ""
-    NOTION_REDIRECT_URI: str = "http://localhost:5173/auth/callback"
+    NOTION_REDIRECT_URI: str = "http://localhost:5173/auth/notion/callback"
     NOTION_API_KEY: str = ""
     NOTION_DATABASE_ID: str = ""
+
+    @model_validator(mode="after")
+    def _check_sandbox_production(self) -> "Settings":
+        """Refuse to start with sandbox auth in production."""
+        if self.DEV_SANDBOX_AUTH and self.ENVIRONMENT == "production":
+            raise RuntimeError(
+                "DEV_SANDBOX_AUTH=True is not allowed when ENVIRONMENT=production. "
+                "Set DEV_SANDBOX_AUTH=False in your production .env file."
+            )
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -88,5 +123,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-

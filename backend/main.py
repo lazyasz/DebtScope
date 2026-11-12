@@ -12,9 +12,16 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings
 from backend.database.connection import init_db, SessionLocal
-from backend.services.seed_service import seed_database
+from backend.services.seed_service import seed_database, ensure_demo_workspace
 from backend.services.storage_client import R2StorageClient
 from backend.api.routes import api_router
+
+# Fail-fast: refuse to start with sandbox auth in production
+if settings.DEV_SANDBOX_AUTH and settings.ENVIRONMENT == "production":
+    raise RuntimeError(
+        "DEV_SANDBOX_AUTH=True in ENVIRONMENT=production. "
+        "Set DEV_SANDBOX_AUTH=False in .env and restart."
+    )
 
 
 @asynccontextmanager
@@ -33,9 +40,10 @@ async def lifespan(app: FastAPI):
     # 2. Initialize DB schema
     init_db()
 
-    # 3. Seed demo and Apache Lakehouse data for out-of-the-box demonstration
+    # 3. Provision demo workspace (idempotent), then seed demo data
     db = SessionLocal()
     try:
+        ensure_demo_workspace(db)
         seed_database(db)
     finally:
         db.close()

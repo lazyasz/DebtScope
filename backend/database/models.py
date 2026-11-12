@@ -219,6 +219,11 @@ class PriorityScore(Base):
     quadrant = Column(String(50), default="OPPORTUNISTIC") # QUICK_WIN, STRATEGIC_REFACTOR, OPPORTUNISTIC, DEPRIORITIZED
     rank = Column(Integer, default=1)
     
+    # Missing dimensions & dynamic coverage metadata (ADR 010)
+    scored_dimensions_count = Column(Integer, default=5)
+    dimension_coverage = Column(String(50), default="5 of 5 dimensions")
+    missing_dimensions_json = Column(Text, default="[]")
+    
     calculated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     file = relationship("SourceFile", back_populates="priority_score")

@@ -39,6 +39,9 @@ class PriorityScoreResponse(BaseModel):
     roi_score: float
     quadrant: str
     rank: int
+    scored_dimensions_count: int = 5
+    dimension_coverage: str = "5 of 5 dimensions"
+    missing_dimensions: List[str] = []
     calculated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -61,8 +64,12 @@ class RankedFilePriority(BaseModel):
     recommendation: str
     quadrant: str
     roi_score: float
+    scored_dimensions_count: int = 5
+    dimension_coverage: str = "5 of 5 dimensions"
+    missing_dimensions: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class FileDetailResponse(BaseModel):
@@ -86,6 +93,9 @@ class FileDetailResponse(BaseModel):
     action_summary: str
     quadrant: str
     roi_score: float
+    scored_dimensions_count: int = 5
+    dimension_coverage: str = "5 of 5 dimensions"
+    missing_dimensions: List[str] = []
     breakdown: ScoreBreakdown
     technical_debt_items: List[Dict[str, Any]] = []
 

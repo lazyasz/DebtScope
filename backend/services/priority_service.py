@@ -196,11 +196,14 @@ class PriorityService:
         cls,
         db: Session,
         repo_id: Optional[int] = None,
+        workspace_id: Optional[str] = None,
         priority_level: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> List[RankedFilePriority]:
         query = db.query(PriorityScore).join(SourceFile).filter(SourceFile.is_active == True)
+        if workspace_id:
+            query = query.filter(PriorityScore.workspace_id == workspace_id)
         if repo_id:
             query = query.filter(SourceFile.repository_id == repo_id)
         if priority_level:

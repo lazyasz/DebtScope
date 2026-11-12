@@ -41,6 +41,10 @@ REQUIRED_CONTRACT_FIELDS = [
 
 def test_full_pipeline_execution(tmp_path):
     """Executes the full pipeline in an isolated test directory and verifies the output contract."""
+    if os.name == "nt":
+        hadoop_home = os.environ.get("HADOOP_HOME")
+        if not hadoop_home or not os.path.exists(os.path.join(hadoop_home, "bin", "winutils.exe")):
+            pytest.skip("PySpark integration tests require Hadoop winutils.exe on Windows. Skipping.")
     raw_dir = str(tmp_path / "raw")
     proc_dir = str(tmp_path / "processed")
     feat_dir = str(tmp_path / "features")

@@ -3,11 +3,25 @@ Integration tests for PySpark distributed processing layer.
 Verifies DataFrame operations, window functions, and relational joins.
 """
 
+import os
+import sys
 import pytest
 from src.data_pipeline.spark_processor import SparkDataProcessor
 
+# Guard against PySpark hanging on Windows without Hadoop winutils
+def has_hadoop_winutils() -> bool:
+    if os.name != "nt":
+        return True
+    hadoop_home = os.environ.get("HADOOP_HOME")
+    if not hadoop_home or not os.path.exists(hadoop_home):
+        return False
+    winutils_path = os.path.join(hadoop_home, "bin", "winutils.exe")
+    return os.path.exists(winutils_path)
+
 @pytest.fixture(scope="module")
 def spark_processor():
+    if not has_hadoop_winutils():
+        pytest.skip("PySpark integration tests require Hadoop winutils.exe on Windows. Skipping.")
     processor = SparkDataProcessor(app_name="SparkTestRunner")
     yield processor
     processor.stop()

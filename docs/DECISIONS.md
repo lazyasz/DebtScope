@@ -33,7 +33,14 @@ An investigation of the current codebase revealed conflicting definitions across
    - **`OPPORTUNISTIC`** (Fill-in / Cooldown): $PS_{base} < 60.0$, $Effort \le 40.0$
    - **`DEPRIORITIZED`** (Low ROI Backlog): $PS_{base} < 60.0$, $Effort > 40.0$
 4. **Coordinate Alignment**: `PriorityMatrix.jsx` will be configured with a uniform $0-100$ scale for both X and Y axes ($PS_{base}$ on Y, $Effort$ on X).
-5. **Academic Formula Preservation**: The 5-dimensional weights ($w_{TR}=0.35, w_{BI}=0.30, w_U=0.15, w_M=0.10, w_A=0.10$, effort weight $w_E=0.15$) will remain unchanged to preserve academic viva alignment.
+5. **Academic Formula Preservation**: The 5-dimensional weights:
+   - $w_{TR} = 0.35$ (Technical Risk)
+   - $w_{BI} = 0.30$ (Business Impact)
+   - $w_U = 0.15$ (Release / Sprint Urgency)
+   - $w_M = 0.10$ (Maintenance Cost)
+   - $w_A = 0.10$ (Debt Age)
+   - **Strict Sum**: $0.35 + 0.30 + 0.15 + 0.10 + 0.10 = 1.00$.
+   - **Effort Adjustment Stage**: The remediation effort factor ($w_E = 0.15$) is a *separate post-processing blend* in Step 6 ($PS_{final} = \text{clamp}(0.85 \cdot PS_{base} + 0.15 \cdot (100 - Effort), 0, 100)$), NOT a sixth weight in $PS_{base}$. All configs and docs are updated to strictly reflect this.
 
 ### Consequences & Risks
 - **Consequences**: Consistent rankings and quadrant classifications across backend API responses, frontend tables, and scatter plots.
@@ -231,7 +238,55 @@ Third-party integrations (GitHub App, Jira Cloud, Notion) handle sensitive acces
 
 ---
 
-## ADR 009: Test Suite Portability & Conditional PySpark Execution
+## ADR 010: Missing Dimensions, Dynamic Weight Renormalization & Explicit Coverage Labeling
+
+### Context
+In real multi-repo production usage, not all 5 dimensions are always available simultaneously:
+- A repository without Jira connected lacks verified Release Proximity ($U_{comp}$).
+- A repository without coverage artifacts lacks verified test coverage in $TR_{static}$.
+- A new microservice lacks maintenance cost ticket history ($MCost$).
+Currently, the codebase injects arbitrary default numbers (e.g. `release_proximity=75.0`, `test_coverage=92.0 - 1.7*complexity`), leading to artificial scores without indicating that dimensions were missing.
+
+### Decision
+1. **Dynamic Weight Renormalization**:
+   When a dimension $k$ has no observed or user-configured signal, its weight $w_k$ is set to 0, and the remaining available dimension weights $w_{available}$ are dynamically renormalized:
+   $$w'_i = \frac{w_i}{\sum_{j \in \text{Available}} w_j}$$
+   This guarantees that baseline priority scores remain mathematically grounded on a true $0–100$ scale without defaulting fabricated penalty points.
+2. **Dimension Coverage Metadata**:
+   Every scored file and repository API response must include:
+   - `dimension_coverage`: `"N of 5 dimensions scored"` (e.g., `"4 of 5 dimensions"`).
+   - `available_dimensions`: e.g. `["technical_risk", "business_impact", "maintenance_cost", "debt_age"]`.
+   - `missing_dimensions`: e.g. `["release_urgency"]` (with actionable tip: "Connect Jira to unlock sprint urgency").
+3. **No Unlabeled Cross-Coverage Ranking**:
+   The backlog rank view and API will explicitly label the coverage tier and prevent sorting across disparate dimension sets without a visible indicator/filter.
+
+### Consequences & Risks
+- **Consequences**: Complete mathematical honesty and actionable upsell for connecting Jira/Notion.
+- **Risk**: A repo scored on 3 dimensions might have a higher numerical score than one scored on 5.
+- **Mitigation**: The UI explicitly flags dimension coverage and offers a filter to view items by dimension completeness.
+
+---
+
+## ADR 011: Sandbox Authentication Guardrails (DEV_SANDBOX_AUTH)
+
+### Context
+To enable fast local development and automated testing without requiring live Google OAuth credentials on every test run, a sandbox authentication mode is required. However, sandbox auth must never leak into production.
+
+### Decision
+1. **Explicit Environment Guardrail**:
+   - Introduce `DEV_SANDBOX_AUTH: bool = False` in `backend/config.py`.
+   - At application startup and on any authentication request:
+     ```python
+     if settings.ENVIRONMENT.lower() == "production" and settings.DEV_SANDBOX_AUTH:
+         raise RuntimeError("FATAL SECURITY VIOLATION: DEV_SANDBOX_AUTH cannot be enabled when ENVIRONMENT=production!")
+     ```
+2. **Prominent UI Warning**:
+   - When `DEV_SANDBOX_AUTH` is active, `/api/v1/auth/me` includes `"sandbox_mode": True`.
+   - The React frontend renders a persistent amber warning banner:
+     `"⚠️ DEV SANDBOX AUTH ACTIVE — Using simulated identities. Disable DEV_SANDBOX_AUTH for production."`
+3. **Production Standard**:
+   - Production environments strictly enforce verified Google OIDC ID tokens via authorization code flow and signed `httpOnly`, `Secure` session cookies.
+
 
 ### Context
 The PySpark distributed processing tests (`test_end_to_end_pipeline.py`, `test_spark_processor.py`) attempt to spin up a local SparkSession with a JVM backend. On Windows developer machines without Hadoop `winutils.exe`, this hangs indefinitely or takes minutes waiting for socket timeouts.

@@ -180,8 +180,11 @@ def get_me(
                     "user": {
                         "id": user.id,
                         "email": user.email,
+                        "name": user.full_name,       # alias for compat
                         "full_name": user.full_name,
                         "avatar_url": user.avatar_url,
+                        "role": payload.get("role", "Lead Architect"),
+                        "permissions": payload.get("permissions", ["prioritize", "export_jira", "sync_notion", "override_weights", "manage_integrations"]),
                     },
                     "sandbox_mode": payload.get("sandbox", sandbox_mode),
                     "workspace_id": ws.id if ws else "ws_demo",
@@ -190,6 +193,7 @@ def get_me(
     # No valid token — return sandbox profile if DEV_SANDBOX_AUTH, else unauthenticated
     if sandbox_mode:
         user, app_jwt = get_sandbox_demo_user(db)
+        demo = DEMO_PROFILES.get("dhruv", {})
         ws = db.query(Workspace).filter(Workspace.id == "ws_demo").first()
         return JSONResponse(
             content={
@@ -197,8 +201,11 @@ def get_me(
                 "user": {
                     "id": user.id,
                     "email": user.email,
+                    "name": user.full_name,       # alias for compat
                     "full_name": user.full_name,
                     "avatar_url": user.avatar_url,
+                    "role": demo.get("role", "Lead Architect"),
+                    "permissions": demo.get("permissions", ["prioritize", "export_jira", "sync_notion", "override_weights", "manage_integrations"]),
                 },
                 "sandbox_mode": True,
                 "workspace_id": ws.id if ws else "ws_demo",

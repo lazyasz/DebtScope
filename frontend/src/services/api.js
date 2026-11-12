@@ -103,6 +103,21 @@ export async function scanRepository(url) {
   return data;
 }
 
+export async function triggerBackgroundScan(url, authToken = null) {
+  const { data } = await apiClient.post('/api/v1/jobs/scan', { url, auth_token: authToken });
+  return data;
+}
+
+export async function getJobStatus(jobId) {
+  const { data } = await apiClient.get(`/api/v1/jobs/${jobId}`);
+  return data;
+}
+
+export async function listJobs() {
+  const { data } = await apiClient.get('/api/v1/jobs');
+  return data;
+}
+
 // -------------------------------------------------------------
 // Authentication & RBAC APIs
 // -------------------------------------------------------------

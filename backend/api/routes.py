@@ -13,6 +13,7 @@ from backend.api.unified_integrations_routes import router as integrations_route
 from backend.api.lakehouse_routes import router as lakehouse_router
 from backend.api.simulator_routes import router as simulator_router
 from backend.api.copilot_routes import router as copilot_router
+from backend.api.jobs_routes import router as jobs_router
 
 api_router = APIRouter()
 
@@ -27,6 +28,8 @@ api_router.include_router(integrations_router)
 api_router.include_router(lakehouse_router)
 api_router.include_router(simulator_router)
 api_router.include_router(copilot_router)
+api_router.include_router(jobs_router)
+
 
 
 

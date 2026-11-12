@@ -4,7 +4,7 @@ Provides CRUD and health summary operations for tracked code repositories.
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
 from backend.database.models import Repository, SourceFile, PriorityScore
@@ -94,19 +94,54 @@ from pydantic import BaseModel, Field
 
 class RepoScanRequest(BaseModel):
     url: str = Field(..., description="GitHub repository URL or Apache project key (e.g., https://github.com/apache/zookeeper)")
+    background: bool = Field(default=False, description="Whether to execute analysis asynchronously in background worker")
 
 
 @router.post("/scan", summary="Scan GitHub Repository or Ingest Apache Lakehouse Project")
-def scan_repository(payload: RepoScanRequest, db: Session = Depends(get_db)):
+def scan_repository(
+    payload: RepoScanRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """
-    Scans any public GitHub repository or pre-loaded Apache project,
-    extracts code complexity & debt metrics, applies real ML defect models,
-    computes 5D priority scores, and returns full health analysis.
+    Scans a GitHub repository.
+    If background=True, queues a sandboxed background analysis job and returns 202.
+    Otherwise executes synchronously for backward-compatible demonstration.
     """
+    if payload.background:
+        from backend.api.jobs_routes import trigger_repository_scan, ScanRepoRequest
+        from backend.database.tenant import get_current_workspace, get_current_user
+        # Delegate to background scan logic
+        # We can directly invoke trigger_repository_scan with default demo workspace
+        from backend.database.models import Workspace
+        ws = db.query(Workspace).filter(Workspace.id == "ws_demo").first()
+        import uuid
+        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        from backend.database.models import AnalysisJob
+        job = AnalysisJob(
+            id=job_id,
+            workspace_id="ws_demo",
+            repo_url=payload.url,
+            status="QUEUED",
+            stage="Queued for analysis...",
+            progress_pct=0,
+        )
+        db.add(job)
+        db.commit()
+        from backend.services.analysis_worker import run_analysis_pipeline
+        background_tasks.add_task(run_analysis_pipeline, job_id, None)
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "repo_url": payload.url,
+            "message": "Repository analysis queued in background worker.",
+        }
+
     from backend.services.repo_scanner_service import RepoScannerService
     try:
         result = RepoScannerService.scan_github_repository(db, payload.url)
         return result
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 

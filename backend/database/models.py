@@ -268,3 +268,26 @@ class IntegrationConnection(Base):
     last_sync_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class AnalysisJob(Base):
+    __tablename__ = "analysis_jobs"
+
+    id = Column(String(100), primary_key=True, index=True)  # e.g. job_uuid
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, default="ws_demo", index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
+    repo_url = Column(String(255), nullable=False)
+    
+    # Status: QUEUED, CLONING, ANALYZING, MINING, COMPLETED, FAILED, CANCELLED
+    status = Column(String(30), default="QUEUED", index=True)
+    stage = Column(String(100), default="Queued for analysis")
+    progress_pct = Column(Integer, default=0)  # 0 to 100
+    
+    error_message = Column(Text, nullable=True)
+    result_summary = Column(Text, nullable=True)  # JSON summary
+    files_analyzed = Column(Integer, default=0)
+    
+    created_at = Column(DateTime, default=utc_now)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+

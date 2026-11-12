@@ -83,3 +83,38 @@ def update_business_context(
     PriorityService.calculate_file_priority(db, file_id)
     RecommendationService.generate_file_recommendation(db, file_id)
     return ctx
+
+
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any, List
+
+class ApplyBusinessRulesRequest(BaseModel):
+    repository_id: int
+    rules: Optional[List[Dict[str, Any]]] = None
+
+
+@router.post("/rules/apply", summary="Apply Path-Pattern Business Rules to Repository")
+def apply_business_rules(payload: ApplyBusinessRulesRequest, db: Session = Depends(get_db)):
+    """
+    Applies configurable path-pattern rules (e.g. services/payment/** -> criticality=95)
+    across all files in a repository and recalculates priority rankings.
+    """
+    from backend.services.business_rules_service import BusinessRulesEngine
+    count = BusinessRulesEngine.apply_rules_to_repository(
+        db,
+        repository_id=payload.repository_id,
+        custom_rules=payload.rules,
+    )
+    return {
+        "status": "success",
+        "repository_id": payload.repository_id,
+        "files_updated": count,
+    }
+
+
+@router.get("/rules/defaults", summary="Get Default Domain Rules")
+def get_default_business_rules():
+    """Returns platform default path matching rules for business criticality."""
+    from backend.services.business_rules_service import DEFAULT_WORKSPACE_RULES
+    return {"default_rules": DEFAULT_WORKSPACE_RULES}
+

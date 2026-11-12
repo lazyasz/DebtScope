@@ -21,79 +21,117 @@ const apiClient = axios.create({
 
 export const USE_REAL_API = true;
 
+/**
+ * Checks if the current session is operating in the seeded demo / sandbox workspace.
+ * When false, silent mock fallbacks are completely eliminated so tenant users
+ * receive genuine HTTP/network errors.
+ */
+export function isDemoWorkspace() {
+  const ws = localStorage.getItem('debtscope_workspace') || sessionStorage.getItem('debtscope_workspace');
+  return !ws || ws === 'demo' || ws === 'ws_demo';
+}
+
 export async function getMetrics() {
-  if (!USE_REAL_API) return mockApi.getMetrics();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getMetrics();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/metrics');
     return data;
   } catch (err) {
-    console.warn('[API] /api/metrics failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/metrics failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getMetrics();
   }
 }
 
 export async function getTechnicalDebt() {
-  if (!USE_REAL_API) return mockApi.getTechnicalDebt();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getTechnicalDebt();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/technical-debt');
     return data;
   } catch (err) {
-    console.warn('[API] /api/technical-debt failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/technical-debt failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getTechnicalDebt();
   }
 }
 
 export async function getPredictions() {
-  if (!USE_REAL_API) return mockApi.getPredictions();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getPredictions();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/predictions');
     return data;
   } catch (err) {
-    console.warn('[API] /api/predictions failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/predictions failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getPredictions();
   }
 }
 
 export async function getHotspots() {
-  if (!USE_REAL_API) return mockApi.getHotspots();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getHotspots();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/hotspots');
     return data;
   } catch (err) {
-    console.warn('[API] /api/hotspots failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/hotspots failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getHotspots();
   }
 }
 
 export async function getPriorities() {
-  if (!USE_REAL_API) return mockApi.getPriorities();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getPriorities();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/priorities');
     return data;
   } catch (err) {
-    console.warn('[API] /api/priorities failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/priorities failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getPriorities();
   }
 }
 
 export async function getRecommendations() {
-  if (!USE_REAL_API) return mockApi.getRecommendations();
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getRecommendations();
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get('/api/recommendations');
     return data;
   } catch (err) {
-    console.warn('[API] /api/recommendations failed, falling back to mock data:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/recommendations failed, falling back to mock data (demo mode):', err.message);
     return mockApi.getRecommendations();
   }
 }
 
 export async function getFile(id) {
-  if (!USE_REAL_API) return mockApi.getFile(id);
+  if (!USE_REAL_API) {
+    if (isDemoWorkspace()) return mockApi.getFile(id);
+    throw new Error('Real API disabled but operating outside demo workspace.');
+  }
   try {
     const { data } = await apiClient.get(`/api/files/${id}`);
     return data;
   } catch (err) {
-    console.warn(`[API] /api/files/${id} failed, falling back to mock data:`, err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn(`[API] /api/files/${id} failed, falling back to mock data (demo mode):`, err.message);
     return mockApi.getFile(id);
   }
 }
@@ -124,9 +162,13 @@ export async function listJobs() {
 export async function getAuthMe() {
   try {
     const { data } = await apiClient.get('/api/auth/me');
+    if (data?.workspace_id) {
+      localStorage.setItem('debtscope_workspace', data.workspace_id);
+    }
     return data;
   } catch (err) {
-    console.warn('[API] /api/auth/me failed:', err.message);
+    if (!isDemoWorkspace()) throw err;
+    console.warn('[API] /api/auth/me failed (demo mode):', err.message);
     return {
       status: 'authenticated',
       user: {
@@ -138,7 +180,8 @@ export async function getAuthMe() {
         role_code: 'lead_architect',
         permissions: ['prioritize', 'export_jira', 'sync_notion', 'override_weights', 'manage_integrations'],
         team: 'Core Platform & Architecture'
-      }
+      },
+      workspace_id: 'ws_demo'
     };
   }
 }
@@ -148,17 +191,24 @@ export async function getDemoProfiles() {
     const { data } = await apiClient.get('/api/auth/profiles');
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     return { profiles: {}, active_profile: {} };
   }
 }
 
 export async function loginWithGoogle(credential) {
   const { data } = await apiClient.post('/api/auth/google', { credential });
+  if (data?.workspace_id) {
+    localStorage.setItem('debtscope_workspace', data.workspace_id);
+  }
   return data;
 }
 
 export async function exchangeGoogleCode(code) {
   const { data } = await apiClient.post('/api/auth/google/code', { code });
+  if (data?.workspace_id) {
+    localStorage.setItem('debtscope_workspace', data.workspace_id);
+  }
   return data;
 }
 
@@ -168,8 +218,14 @@ export async function switchDemoProfile(profile_key) {
 }
 
 export async function logoutAuth() {
-  const { data } = await apiClient.post('/api/auth/logout');
-  return data;
+  try {
+    const { data } = await apiClient.post('/api/auth/logout');
+    localStorage.removeItem('debtscope_workspace');
+    return data;
+  } catch (err) {
+    localStorage.removeItem('debtscope_workspace');
+    throw err;
+  }
 }
 
 // -------------------------------------------------------------
@@ -209,6 +265,7 @@ export async function runWhatIfSimulation(payload) {
     const { data } = await apiClient.post('/api/simulator/what-if', payload);
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn('[API] /api/simulator/what-if failed, computing client fallback:', err.message);
     const effort = payload.refactoring_effort_pct || 40.0;
     const testCov = payload.test_coverage_pct || 80.0;
@@ -293,6 +350,7 @@ export async function getFinancialTcoAnalysis(payload = {}) {
     });
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn('[API] /api/simulator/financial-tco failed, fallback:', err.message);
     const hourly = payload.hourly_rate || 85.0;
     const teamSize = payload.team_size || 12;
@@ -360,6 +418,7 @@ export async function getAiRemediationRecipe(payload) {
     const { data } = await apiClient.post('/api/recommendations/ai-recipe', payload);
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn('[API] /api/recommendations/ai-recipe failed, fallback to local recipe generator:', err.message);
     return {
       status: 'success',
@@ -411,6 +470,7 @@ export async function evaluateCiCdPr(payload) {
     const { data } = await apiClient.post('/api/ci-cd/evaluate-pr', payload);
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn('[API] /api/ci-cd/evaluate-pr failed, fallback to local evaluator:', err.message);
     const totalLines = (payload.changed_files || []).reduce((acc, f) => acc + (f.lines_added || 0) + (f.lines_deleted || 0), 0);
     const blocked = totalLines > 450;
@@ -445,6 +505,7 @@ export async function getExecutiveReportSummary() {
     const { data } = await apiClient.get('/api/reports/executive-summary');
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn('[API] /api/reports/executive-summary failed, fallback:', err.message);
     return {
       status: 'success',
@@ -485,6 +546,7 @@ export async function getIntegrationsStatus() {
       const { data } = await apiClient.get('/api/integrations/status');
       return data;
     } catch (e) {
+      if (!isDemoWorkspace()) throw err;
       console.warn('[API] /integrations/status failed, fallback:', err.message);
       return {
         status: 'healthy',
@@ -504,6 +566,7 @@ export async function getProviderAuthUrl(provider, redirectUri = null) {
     });
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     return {
       provider,
       auth_url: `${window.location.origin}/integrations?provider=${provider}&auth_success=true&mock_code=${provider}_mock_code_2026`,
@@ -521,6 +584,7 @@ export async function exchangeProviderCode(provider, code, state = null, redirec
     });
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn(`[API] ${provider} callback failed:`, err.message);
     return {
       status: 'success',
@@ -537,6 +601,7 @@ export async function getProviderResources(provider, query = '') {
     });
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn(`[API] ${provider} resources failed:`, err.message);
     if (provider === 'github') {
       return {
@@ -578,6 +643,7 @@ export async function syncProviderResources(provider, resourceIds) {
     });
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn(`[API] ${provider} sync failed:`, err.message);
     return {
       status: 'success',
@@ -593,6 +659,7 @@ export async function disconnectProvider(provider) {
     const { data } = await apiClient.post(`/api/v1/integrations/${provider}/disconnect`);
     return data;
   } catch (err) {
+    if (!isDemoWorkspace()) throw err;
     console.warn(`[API] ${provider} disconnect failed:`, err.message);
     return { status: 'success', message: `${provider} disconnected.` };
   }
@@ -609,7 +676,11 @@ export async function getMe() {
   try {
     const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
     if (!res.ok) return null;
-    return res.json();
+    const data = await res.json();
+    if (data?.workspace_id) {
+      localStorage.setItem('debtscope_workspace', data.workspace_id);
+    }
+    return data;
   } catch (err) {
     console.warn('[API] /auth/me failed:', err.message);
     return null;
@@ -625,14 +696,13 @@ export async function logout() {
       method: 'POST',
       credentials: 'include',
     });
+    localStorage.removeItem('debtscope_workspace');
   } catch (err) {
+    localStorage.removeItem('debtscope_workspace');
     console.warn('[API] logout failed:', err.message);
   }
 }
 
 export { apiClient };
 export default apiClient;
-
-// TODO P1→P2: Remove silent mock fallback once real analysis endpoints are live.
-// The mock fallback in each function above is intentional until P2 real analysis.
 

@@ -3,6 +3,7 @@ Priority Engine: Core business-aware decision intelligence service.
 Calculates transparent, multi-factor technical debt priority scores, ROI indices, and ranks.
 """
 
+import json
 from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -57,20 +58,55 @@ class PriorityService:
         max_debt_age = max([d.debt_age_days for d in debt_items], default=30)
         normalized_debt_age = min(100.0, (max_debt_age / 365.0) * 100.0)
 
-        # Baseline Priority Score (0–100)
-        baseline_score = (
-            (settings.WEIGHT_TECHNICAL_RISK * composite_tech_risk) +
-            (settings.WEIGHT_BUSINESS_IMPACT * composite_business_impact) +
-            (settings.WEIGHT_RELEASE_URGENCY * composite_urgency) +
-            (settings.WEIGHT_MAINTENANCE_COST * maint_cost) +
-            (settings.WEIGHT_DEBT_AGE * normalized_debt_age)
-        )
+        # ── ADR 010: Dynamic Weight Renormalization & Missing Dimensions ───
+        # Dimension Availability Matrix:
+        dim_matrix = {
+            "technical_risk": {
+                "val": composite_tech_risk,
+                "weight": settings.WEIGHT_TECHNICAL_RISK,
+                "available": metric is not None or prediction is not None,
+            },
+            "business_impact": {
+                "val": composite_business_impact,
+                "weight": settings.WEIGHT_BUSINESS_IMPACT,
+                "available": bctx is not None,
+            },
+            "release_urgency": {
+                "val": composite_urgency,
+                "weight": settings.WEIGHT_RELEASE_URGENCY,
+                "available": bctx is not None and getattr(bctx, "sprint_urgency", None) is not None,
+            },
+            "maintenance_cost": {
+                "val": maint_cost,
+                "weight": settings.WEIGHT_MAINTENANCE_COST,
+                "available": bctx is not None and getattr(bctx, "maintenance_cost", None) is not None,
+            },
+            "debt_age": {
+                "val": normalized_debt_age,
+                "weight": settings.WEIGHT_DEBT_AGE,
+                "available": len(debt_items) > 0 or max_debt_age > 0,
+            },
+        }
+
+        active_dims = [k for k, v in dim_matrix.items() if v["available"]]
+        missing_dims = [k for k, v in dim_matrix.items() if not v["available"]]
+        total_active_weight = sum(dim_matrix[k]["weight"] for k in active_dims)
+
+        if total_active_weight > 0:
+            baseline_score = sum(
+                dim_matrix[k]["val"] * (dim_matrix[k]["weight"] / total_active_weight)
+                for k in active_dims
+            )
+        else:
+            baseline_score = composite_tech_risk
+
+        scored_dims_count = len(active_dims)
+        dim_coverage_text = f"{scored_dims_count} of 5 dimensions"
 
         # Effort & ROI Adjustment
-        # ROI Score = Value / max(15, Effort) * 100
         roi_score = (baseline_score / max(15.0, effort)) * 100.0
 
-        # Final Priority Score accounting for remediation effort (higher ROI gives boost, high effort gives gentle damping)
+        # Final Priority Score accounting for remediation effort (Stage-6 post-processing)
         final_score = (
             (1.0 - settings.EFFORT_BLEND_WEIGHT) * baseline_score +
             settings.EFFORT_BLEND_WEIGHT * (100.0 - effort)
@@ -87,7 +123,7 @@ class PriorityService:
         else:
             priority_level = "LOW"
 
-        # Determine Quadrant
+        # Standardized Quadrants (Single Source of Truth)
         if baseline_score >= 60.0 and effort <= 40.0:
             quadrant = "QUICK_WIN"
         elif baseline_score >= 60.0 and effort > 40.0:
@@ -111,6 +147,9 @@ class PriorityService:
                 roi_score=round(roi_score, 2),
                 quadrant=quadrant,
                 rank=1,
+                scored_dimensions_count=scored_dims_count,
+                dimension_coverage=dim_coverage_text,
+                missing_dimensions_json=json.dumps(missing_dims),
             )
             db.add(priority_record)
         else:
@@ -122,10 +161,14 @@ class PriorityService:
             priority_record.priority_level = priority_level
             priority_record.roi_score = round(roi_score, 2)
             priority_record.quadrant = quadrant
+            priority_record.scored_dimensions_count = scored_dims_count
+            priority_record.dimension_coverage = dim_coverage_text
+            priority_record.missing_dimensions_json = json.dumps(missing_dims)
 
         db.commit()
         db.refresh(priority_record)
         return priority_record
+
 
     @classmethod
     def analyze_all_files(cls, db: Session, repo_id: Optional[int] = None) -> List[PriorityScore]:
@@ -172,6 +215,13 @@ class PriorityService:
             rec = file_obj.recommendations[0] if file_obj.recommendations else None
             recommendation_text = rec.action_summary if rec else f"Schedule review for {s.priority_level} priority"
 
+            missing_list = []
+            if getattr(s, "missing_dimensions_json", None):
+                try:
+                    missing_list = json.loads(s.missing_dimensions_json)
+                except Exception:
+                    pass
+
             results.append(
                 RankedFilePriority(
                     rank=s.rank,
@@ -190,6 +240,9 @@ class PriorityService:
                     recommendation=recommendation_text,
                     quadrant=s.quadrant,
                     roi_score=s.roi_score,
+                    scored_dimensions_count=getattr(s, "scored_dimensions_count", 5) or 5,
+                    dimension_coverage=getattr(s, "dimension_coverage", "5 of 5 dimensions") or "5 of 5 dimensions",
+                    missing_dimensions=missing_list,
                 )
             )
         return results
@@ -259,6 +312,13 @@ class PriorityService:
         rec_name = rec.recommendation_type if rec else ("Refactor immediately" if score.priority_level == "CRITICAL" else "Monitor")
         rec_action = rec.action_summary if rec else ("Allocate senior engineer immediately" if score.priority_level == "CRITICAL" else "Monitor during routine updates")
 
+        detail_missing_list = []
+        if getattr(score, "missing_dimensions_json", None):
+            try:
+                detail_missing_list = json.loads(score.missing_dimensions_json)
+            except Exception:
+                pass
+
         return FileDetailResponse(
             file=file_obj.file_name,
             file_id=file_obj.id,
@@ -276,6 +336,9 @@ class PriorityService:
             action_summary=rec_action,
             quadrant=score.quadrant,
             roi_score=score.roi_score,
+            scored_dimensions_count=getattr(score, "scored_dimensions_count", 5) or 5,
+            dimension_coverage=getattr(score, "dimension_coverage", "5 of 5 dimensions") or "5 of 5 dimensions",
+            missing_dimensions=detail_missing_list,
             breakdown=breakdown,
             technical_debt_items=debt_list,
         )

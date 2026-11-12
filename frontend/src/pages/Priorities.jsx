@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
-import PriorityMatrix from '../charts/PriorityMatrix';
+import PriorityMatrix, { formatQuadrant, getQuadrantStyle } from '../charts/PriorityMatrix';
 import JiraExportModal from '../components/integrations/JiraExportModal';
 import NotionSyncModal from '../components/integrations/NotionSyncModal';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
@@ -23,7 +23,9 @@ import {
   Code2,
   Clock,
   Target,
-  Wand2
+  Wand2,
+  Compass,
+  Sliders
 } from 'lucide-react';
 
 export default function Priorities() {
@@ -62,12 +64,12 @@ export default function Priorities() {
   const openSingleJira = (item) => {
     setSelectedComponent({
       component: item.file_path || item.file_name || item.file || item.name || 'Component',
-      priority_score: item.priority_score || 75.0,
+      priority_score: item.priority_score || item.final_priority_score || 75.0,
       remediation_effort_hours: item.remediation_effort || 10.0,
       defect_probability: ((item.technical_risk || item.risk_score || 60) / 100) * 0.8,
       technical_risk: item.technical_risk || item.risk_score || 60.0,
       business_impact: item.business_impact || 70.0,
-      roi_quadrant: (item.business_impact || 7) >= 5 && (item.remediation_effort || 4) <= 5 ? 'Quick Wins' : 'Strategic Refactoring',
+      roi_quadrant: formatQuadrant(item.quadrant),
     });
     setIsBulkExport(false);
     setJiraModalOpen(true);
@@ -89,23 +91,26 @@ export default function Priorities() {
     { id: 'Cloud Infra', label: 'Cloud Infra' },
   ];
 
-  const quickWinsCount = data.filter((i) => (i.business_impact || 7) >= 5 && (i.remediation_effort || 4) <= 5).length;
-  const strategicCount = data.filter((i) => (i.business_impact || 7) >= 5 && (i.remediation_effort || 4) > 5).length;
-  const deprioritizedCount = data.length - quickWinsCount - strategicCount;
+  const quickWinsCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('QUICK')).length;
+  const strategicCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('STRATEGIC')).length;
+  const opportunisticCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('OPPORTUNISTIC')).length;
+  const deprioritizedCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('DEPRIORITIZED')).length;
 
   const quadrantTabs = [
     { id: 'All', label: 'All Quadrants', count: data.length },
-    { id: 'Quick Wins', label: 'Quick Wins', count: quickWinsCount },
-    { id: 'Strategic Refactoring', label: 'Strategic', count: strategicCount },
-    { id: 'Deprioritized', label: 'Deprioritized', count: deprioritizedCount },
+    { id: 'QUICK_WIN', label: 'Quick Wins', count: quickWinsCount },
+    { id: 'STRATEGIC_REFACTOR', label: 'Strategic', count: strategicCount },
+    { id: 'OPPORTUNISTIC', label: 'Opportunistic', count: opportunisticCount },
+    { id: 'DEPRIORITIZED', label: 'Deprioritized', count: deprioritizedCount },
   ];
 
   const filteredData = data.filter((item) => {
-    const isQuickWin = (item.business_impact || 7) >= 5 && (item.remediation_effort || 4) <= 5;
-    const isStrategic = (item.business_impact || 7) >= 5 && (item.remediation_effort || 4) > 5;
-    if (activeQuadrant === 'Quick Wins') return isQuickWin;
-    if (activeQuadrant === 'Strategic Refactoring') return isStrategic;
-    if (activeQuadrant === 'Deprioritized') return !isQuickWin && !isStrategic;
+    if (activeQuadrant === 'All') return true;
+    const q = (item.quadrant || '').toUpperCase();
+    if (activeQuadrant === 'QUICK_WIN') return q.includes('QUICK');
+    if (activeQuadrant === 'STRATEGIC_REFACTOR') return q.includes('STRATEGIC');
+    if (activeQuadrant === 'OPPORTUNISTIC') return q.includes('OPPORTUNISTIC');
+    if (activeQuadrant === 'DEPRIORITIZED') return q.includes('DEPRIORITIZED');
     return true;
   });
 
@@ -233,14 +238,18 @@ export default function Priorities() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">Prioritization Formula</span>
-              <div className="text-3xl font-bold text-[#0f1015] mt-1.5">5-Factor</div>
+              <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">Lower Priority Backlog</span>
+              <div className="text-3xl font-bold text-[#0f1015] mt-1.5 font-mono">
+                <AnimatedCounter value={opportunisticCount + deprioritizedCount} /> <span className="text-xs font-normal text-[#525866] font-sans">Modules</span>
+              </div>
             </div>
-            <span className="p-2 rounded-lg bg-[#f3f4f8] text-[#525866]">
-              <Target className="w-4 h-4 text-[#7048e8]" />
+            <span className="p-2 rounded-lg bg-[#f0f9ff] text-[#0284c7]">
+              <Compass className="w-4 h-4 text-[#0284c7]" />
             </span>
           </div>
-          <span className="text-[11px] text-[#525866] font-medium pt-3 border-t border-[#e2e4ea]">Calibrated to SZZ Defect Lift</span>
+          <span className="text-[11px] text-[#0284c7] font-medium pt-3 border-t border-[#e2e4ea]">
+            {opportunisticCount} Opportunistic · {deprioritizedCount} Deprioritized
+          </span>
         </InteractiveCard>
       </section>
 
@@ -249,7 +258,7 @@ export default function Priorities() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold text-[#0f1015]">2D Decision Quadrant Chart</h2>
-            <p className="text-xs text-[#525866]">Business Impact vs Remediation Effort (dot size represents Risk Score)</p>
+            <p className="text-xs text-[#525866]">Priority Score vs Remediation Effort (Thresholds: Priority ≥ 60, Effort ≤ 40)</p>
           </div>
 
           <SpringTabs
@@ -275,12 +284,22 @@ export default function Priorities() {
           <div className="p-3 bg-[#f0ecfc] rounded-lg border border-[#d8cdfa]">
             <span className="text-xs font-mono font-bold text-[#5b42a5] block">Quick Wins</span>
             <span className="text-lg font-bold font-mono text-[#0f1015]">{quickWinsCount}</span>
-            <span className="text-[11px] text-[#525866] block">High Impact, Low Effort</span>
+            <span className="text-[11px] text-[#525866] block">Priority ≥ 60, Effort ≤ 40</span>
           </div>
           <div className="p-3 bg-[#fffbeb] rounded-lg border border-[#fcd34d]">
             <span className="text-xs font-mono font-bold text-[#b45309] block">Strategic</span>
             <span className="text-lg font-bold font-mono text-[#0f1015]">{strategicCount}</span>
-            <span className="text-[11px] text-[#525866] block">High Impact, High Effort</span>
+            <span className="text-[11px] text-[#525866] block">Priority ≥ 60, Effort &gt; 40</span>
+          </div>
+          <div className="p-3 bg-[#f0f9ff] rounded-lg border border-[#bae6fd]">
+            <span className="text-xs font-mono font-bold text-[#0284c7] block">Opportunistic</span>
+            <span className="text-lg font-bold font-mono text-[#0f1015]">{opportunisticCount}</span>
+            <span className="text-[11px] text-[#525866] block">Priority &lt; 60, Effort ≤ 40</span>
+          </div>
+          <div className="p-3 bg-[#f8fafc] rounded-lg border border-[#cbd5e1]">
+            <span className="text-xs font-mono font-bold text-[#64748b] block">Deprioritized</span>
+            <span className="text-lg font-bold font-mono text-[#0f1015]">{deprioritizedCount}</span>
+            <span className="text-[11px] text-[#525866] block">Priority &lt; 60, Effort &gt; 40</span>
           </div>
         </div>
       </section>
@@ -290,7 +309,7 @@ export default function Priorities() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold text-[#0f1015]">Ranked Refactoring Backlog ({filteredData.length})</h2>
-            <p className="text-xs text-[#525866]">Ranked by multi-factor Payoff Score with 1-click Jira ticket dispatch</p>
+            <p className="text-xs text-[#525866]">Ranked by multi-factor Payoff Score with dimension coverage and 1-click Jira ticket dispatch</p>
           </div>
           <button
             onClick={openBulkJira}
@@ -305,9 +324,9 @@ export default function Priorities() {
         <div className="md:hidden space-y-2.5">
           {filteredData.map((item, idx) => {
             const fileName = item.file_path || item.file_name || item.file || item.path || item.name || `module_${item.file_id || idx + 1}`;
-            const isQuickWin = (item.business_impact || 7) >= 5 && (item.remediation_effort || 4) <= 5;
             const priorityScore = (item.priority_score || item.final_priority_score || 84.2).toFixed(1);
             const fileId = item.file_id || item.id || idx + 1;
+            const qStyle = getQuadrantStyle(item.quadrant);
 
             return (
               <div
@@ -324,12 +343,21 @@ export default function Priorities() {
                       {fileName}
                     </span>
                   </div>
-                  <span className={`px-2 py-0.2 rounded font-mono text-[10px] font-bold shrink-0 border ${
-                    isQuickWin 
-                      ? 'bg-[#f0ecfc] text-[#5b42a5] border-[#d8cdfa]' 
-                      : 'bg-[#fffbeb] text-[#b45309] border-[#fcd34d]'
+                  <span
+                    className="px-2 py-0.5 rounded font-mono text-[10px] font-bold shrink-0 border"
+                    style={{ color: qStyle.text, backgroundColor: qStyle.bg, borderColor: qStyle.border }}
+                  >
+                    {formatQuadrant(item.quadrant)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold border ${
+                    (item.scored_dimensions_count ?? 5) === 5
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    {isQuickWin ? 'Quick Win' : 'Strategic'}
+                    {item.dimension_coverage || `${item.scored_dimensions_count ?? 5} of 5 dims`}
                   </span>
                 </div>
 
@@ -343,13 +371,13 @@ export default function Priorities() {
                   <div className="bg-white p-1.5 rounded border border-[#e2e4ea]">
                     <span className="text-[10px] font-mono text-[#88909e] block">Impact</span>
                     <span className="font-mono font-bold text-xs text-[#0f1015] whitespace-nowrap">
-                      {(item.business_impact || 7.5).toFixed(1)}/10
+                      {(item.business_impact || 0).toFixed(1)}/100
                     </span>
                   </div>
                   <div className="bg-white p-1.5 rounded border border-[#e2e4ea]">
                     <span className="text-[10px] font-mono text-[#88909e] block">Effort</span>
                     <span className="font-mono font-bold text-xs text-[#525866] whitespace-nowrap">
-                      {(item.remediation_effort || 12).toFixed(0)}h
+                      {(item.remediation_effort || 0).toFixed(1)}/100
                     </span>
                   </div>
                 </div>
@@ -383,6 +411,7 @@ export default function Priorities() {
                 <th className="py-2.5 px-3 font-semibold text-center">Rank</th>
                 <th className="py-2.5 px-3 font-semibold">Module File</th>
                 <th className="py-2.5 px-3 font-semibold text-center whitespace-nowrap">Priority Score</th>
+                <th className="py-2.5 px-3 font-semibold text-center whitespace-nowrap">Coverage</th>
                 <th className="py-2.5 px-3 font-semibold text-center whitespace-nowrap">Business Impact</th>
                 <th className="py-2.5 px-3 font-semibold text-center whitespace-nowrap">Effort</th>
                 <th className="py-2.5 px-3 font-semibold text-center whitespace-nowrap">Quadrant</th>
@@ -392,9 +421,9 @@ export default function Priorities() {
             <tbody className="divide-y divide-[#f3f4f8]">
               {filteredData.map((item, idx) => {
                 const fileName = item.file_path || item.file_name || item.file || item.path || item.name || `module_${item.file_id || idx + 1}`;
-                const isQuickWin = (item.business_impact || 7) >= 5 && (item.remediation_effort || 4) <= 5;
                 const fileId = item.file_id || item.id || idx + 1;
                 const priorityScore = (item.priority_score || item.final_priority_score || 84.2).toFixed(1);
+                const qStyle = getQuadrantStyle(item.quadrant);
 
                 return (
                   <tr 
@@ -416,19 +445,27 @@ export default function Priorities() {
                     <td className="py-3 px-3 text-center font-mono font-bold text-[#5b42a5] whitespace-nowrap text-xs">
                       {priorityScore}
                     </td>
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded font-mono text-[10px] font-semibold border ${
+                        (item.scored_dimensions_count ?? 5) === 5
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {item.dimension_coverage || `${item.scored_dimensions_count ?? 5} of 5 dims`}
+                      </span>
+                    </td>
                     <td className="py-3 px-3 text-center font-mono font-medium text-[#0f1015] whitespace-nowrap text-xs">
-                      {(item.business_impact || 7.5).toFixed(1)} / 10
+                      {(item.business_impact || 0).toFixed(1)} / 100
                     </td>
                     <td className="py-3 px-3 text-center font-mono text-[#525866] whitespace-nowrap text-xs">
-                      {(item.remediation_effort || 12).toFixed(0)}h
+                      {(item.remediation_effort || 0).toFixed(1)} / 100
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <span className={`px-2 py-0.2 rounded font-mono text-[10px] font-bold border ${
-                        isQuickWin 
-                          ? 'bg-[#f0ecfc] text-[#5b42a5] border-[#d8cdfa]' 
-                          : 'bg-[#fffbeb] text-[#b45309] border-[#fcd34d]'
-                      }`}>
-                        {isQuickWin ? 'Quick Win' : 'Strategic'}
+                      <span
+                        className="px-2 py-0.5 rounded font-mono text-[10px] font-bold border"
+                        style={{ color: qStyle.text, backgroundColor: qStyle.bg, borderColor: qStyle.border }}
+                      >
+                        {formatQuadrant(item.quadrant)}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>

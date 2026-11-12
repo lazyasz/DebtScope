@@ -208,3 +208,35 @@ TOKEN_ENCRYPTION_KEY="<generated-fernet-key>"
 # PostgreSQL Database (Docker Compose default)
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/debtscope_db"
 ```
+
+---
+
+## 6. AI Copilot LLM Provider Setup (Phase 3.5)
+
+### Purpose
+Powers the interactive Grounded AI Engineering Copilot (`POST /api/v1/copilot/chat`) with streaming tool calling against real codebase metrics and AST refactoring diffs. No fine-tuning is required. We use a provider-agnostic interface supporting Google Gemini and Anthropic Claude.
+
+### Option A: Google Gemini (Recommended — Gemini 1.5 Flash / Pro)
+1. Navigate to **[Google AI Studio](https://aistudio.google.com/app/apikey)**.
+2. Sign in with your Google account.
+3. Click **Create API key** -> select or create a Google Cloud project.
+4. Copy the generated key.
+
+### Option B: Anthropic Claude (Claude 3.5 Sonnet)
+1. Navigate to the **[Anthropic Console](https://console.anthropic.com/)**.
+2. Sign in or create an account.
+3. Go to **Settings** -> **API Keys**.
+4. Click **Create Key**, name it `DebtScope Copilot`, and copy the key (`sk-ant-...`).
+
+### `.env` Variables:
+```env
+# Provider selector: 'gemini' (default) or 'claude'
+COPILOT_LLM_PROVIDER=gemini
+
+# Google Gemini API Key (Option A)
+GEMINI_API_KEY="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Anthropic Claude API Key (Option B)
+ANTHROPIC_API_KEY="sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx"
+```
+

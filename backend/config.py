@@ -104,6 +104,12 @@ class Settings(BaseSettings):
     NOTION_API_KEY: str = ""
     NOTION_DATABASE_ID: str = ""
 
+    # Copilot LLM Configuration (Phase 3.5)
+    COPILOT_LLM_PROVIDER: str = "gemini"  # 'gemini' or 'claude'
+    GEMINI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+
+
     @model_validator(mode="after")
     def _check_sandbox_production(self) -> "Settings":
         """Refuse to start with sandbox auth in production."""

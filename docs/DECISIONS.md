@@ -287,13 +287,16 @@ To enable fast local development and automated testing without requiring live Go
 3. **Production Standard**:
    - Production environments strictly enforce verified Google OIDC ID tokens via authorization code flow and signed `httpOnly`, `Secure` session cookies.
 
+---
+
+## ADR 009: PySpark Test Isolation on Windows Platforms
 
 ### Context
 The PySpark distributed processing tests (`test_end_to_end_pipeline.py`, `test_spark_processor.py`) attempt to spin up a local SparkSession with a JVM backend. On Windows developer machines without Hadoop `winutils.exe`, this hangs indefinitely or takes minutes waiting for socket timeouts.
 
 ### Decision
 1. **Conditional PySpark Test Skipping**:
-   - Introduce a custom pytest fixture/marker (`@pytest.mark.pyspark`) that verifies JVM and Hadoop availability before running.
+   - Introduce a custom pytest fixture/marker that verifies JVM and Hadoop availability before running.
    - If running on Windows without `HADOOP_HOME` or valid `winutils.exe`, the test automatically skips with an informative message (`pytest.skip("PySpark requires Hadoop winutils on Windows")`).
 2. **Preserve Pandas / SQLite Fallback Pipeline**:
    - Retain the non-Spark cleaning and feature engineering pipelines, ensuring 100% test coverage across both local developer machines and CI/CD containers.
@@ -302,3 +305,48 @@ The PySpark distributed processing tests (`test_end_to_end_pipeline.py`, `test_s
 - **Consequences**: `pytest` completes in seconds on Windows without hanging.
 - **Risk**: Full distributed PySpark path not verified on local Windows dev without winutils.
 - **Mitigation**: Full PySpark tests run inside Docker containers and Linux CI runners where Spark/Java runs natively.
+
+---
+
+## ADR 012: Grounded Copilot Architecture (LLM Tool Calling, Tenant Isolation, Static AST Verification, and Injection Boundaries)
+
+### Context
+The original Copilot implementation was an entirely fabricated proof-of-concept:
+- `backend/api/copilot_routes.py` used naive `if/elif` string pattern matching (`"god" in q`, `"5d" in q`, `"model" in q`) returning static, canned Markdown strings.
+- Canned responses cited non-existent files (e.g. `services/auth/token_provider.py`), fabricated metrics (LOC: 840, Complexity: 38, Risk: 89.2), leaked $R^2=0.9885$ benchmarks, and claimed synthetic refactoring impacts.
+- `frontend/src/components/copilot/CopilotShell.jsx` contained an identical client-side catch block duplicating the same fabricated text.
+- Recommendation generation in `backend/services/recommendation_service.py` was deterministic rule-mapping from priority buckets, not an intelligent Copilot.
+
+### Decision
+1. **Provider-Agnostic LLM Adapter with Streaming (SSE)**:
+   - Expose `POST /api/v1/copilot/chat` supporting Server-Sent Events (SSE).
+   - Implement an abstract `BaseCopilotLLM` interface with pluggable adapters:
+     * `GeminiCopilotAdapter` (Google GenAI API via `google-genai` / `google.generativeai`)
+     * `ClaudeCopilotAdapter` (Anthropic API via `anthropic`)
+   - Selection controlled via environment variable `COPILOT_LLM_PROVIDER=gemini|claude`.
+   - Never fall back silently to canned responses: if the model or credentials fail, surface a clear, actionable error state to the user.
+2. **Server-Enforced Tenant Isolation on Tool Calls**:
+   - The LLM calls registered tenant-scoped tools: `list_priorities`, `get_file_detail`, `explain_score`, `get_hotspots`, `run_what_if`, `read_code`, `propose_refactor`.
+   - `workspace_id` and `repo_id` are injected by the backend session context directly into tool executions. The model is never permitted to pass or override tenant identifiers.
+3. **Strict Numerical Groundedness**:
+   - The model must never perform manual formula calculations. The `explain_score` tool returns exact engine values ($TR, BI, U, MC, DA$) and active weights.
+   - Every metric, score, LOC, or file path mentioned in an answer must directly originate from a tool output.
+   - Structured citation chips (`[file: payment.py]`, `[score: 82.4]`) are returned in response metadata and rendered as clickable navigation chips in the UI.
+4. **Static AST-Verified Refactoring Proposals**:
+   - When proposing a refactoring diff, the backend first validates the proposed code using `ast.parse` (Python) or language-specific tree-sitter parsers to ensure syntax validity.
+   - Run our static analyzer (cyclomatic complexity, cognitive depth, LOC) on both original and proposed code to compute the *measured* delta.
+   - Code from analyzed repositories is strictly static and never executed.
+   - Every proposal is explicitly watermarked as an advisory suggestion.
+5. **Prompt Injection Defense & Safe Write Operations**:
+   - Repository code, commit messages, Jira tickets, and Notion pages are treated as untrusted data envelopes (`<untrusted_repo_context>`).
+   - System prompts explicitly direct the model to disregard instructions embedded within source code or commit logs.
+   - Destructive or external write actions (e.g. creating Jira tickets) require an explicit user confirmation click in the UI and are validated server-side.
+6. **40+ Scenario Golden Evaluation Suite**:
+   - Implement `evals/copilot_golden.yaml` covering score explanations, hotspot identification, what-if scenarios, cross-tenant isolation attempts, and planted prompt injection attacks.
+   - Automated runner `evals/run_copilot_eval.py` asserts tool-call accuracy ($\ge 90\%$), numerical groundedness ($100\%$), and prompt injection resistance ($100\%$).
+   - Run in CI using deterministic recorded/stubbed models; documentation recorded in `docs/COPILOT_EVAL.md`.
+
+### Consequences & Risks
+- **Consequences**: Completely honest, verifiable engineering copilot grounded in the user's actual code; eliminates hallucinations and fabricated metrics.
+- **Risk**: LLM inference cost and latency.
+- **Mitigation**: Implement per-user rate limiting, max 5 tool-calling turns per request, tool result caching, and token budgets.

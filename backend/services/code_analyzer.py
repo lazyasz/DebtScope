@@ -49,12 +49,26 @@ def is_test_file(rel_path: str) -> bool:
     """Detects whether a file path represents a test file."""
     lower = rel_path.lower().replace("\\", "/")
     filename = os.path.basename(lower)
+    parts = lower.split("/")
     
-    if "test" in lower or "spec" in lower:
+    # Check directory components
+    if any(p in ("tests", "test", "__tests__", "spec", "specs", "fixtures", "mock", "mocks", "testing", "test_cases") for p in parts[:-1]):
         return True
-    if filename.startswith("test_") or filename.endswith("_test.py") or filename.endswith(".test.js") or filename.endswith(".spec.ts"):
+    
+    # Filename prefix/suffix patterns
+    name_no_ext, _ = os.path.splitext(filename)
+    if filename.startswith("test_") or filename.startswith("test-") or name_no_ext in ("test", "tests", "conftest"):
         return True
-    if filename.endswith("test.java") or filename.endswith("tests.java"):
+    if (
+        filename.endswith("_test.py") or filename.endswith("-test.py") or
+        filename.endswith(".test.js") or filename.endswith(".spec.js") or
+        filename.endswith(".test.jsx") or filename.endswith(".spec.jsx") or
+        filename.endswith(".test.ts") or filename.endswith(".spec.ts") or
+        filename.endswith(".test.tsx") or filename.endswith(".spec.tsx") or
+        filename.endswith("test.java") or filename.endswith("tests.java") or
+        filename.endswith("testcase.java") or filename.endswith("testcases.java") or
+        filename.endswith("_test.go") or filename.endswith("_spec.rb")
+    ):
         return True
     return False
 

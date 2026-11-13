@@ -71,6 +71,10 @@ function calculateDiscount(price, userType) {
         assert is_test_file("src/main/OrderServiceTest.java") is True
         assert is_test_file("services/payment_service.py") is False
         assert is_test_file("components/Header.jsx") is False
+        assert is_test_file("src/main/java/com/squareup/javapoet/MethodSpec.java") is False
+        assert is_test_file("services/inspection.py") is False
+        assert classify_file("src/main/java/com/squareup/javapoet/MethodSpec.java") == "source"
+        assert classify_file("services/inspection.py") == "source"
 
     def test_coverage_artifact_detection(self):
         """Verify Cobertura XML coverage parsing."""

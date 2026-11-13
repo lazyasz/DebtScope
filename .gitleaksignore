@@ -1,0 +1,10 @@
+# .gitleaksignore
+# False-positive documentation placeholder in historical commit 84f09aef
+# Flagged by GitHub secret scanning: docs/MANUAL_STEPS.md#L237 • commit 84f09aef
+
+84f09aef3e19fddf4fcf3504fb9ac29112d3e9f3:docs/MANUAL_STEPS.md:google-api-key:237
+84f09aef:docs/MANUAL_STEPS.md:google-api-key:237
+84f09aef:docs/MANUAL_STEPS.md:237
+docs/MANUAL_STEPS.md:google-api-key:237
+docs/MANUAL_STEPS.md:AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

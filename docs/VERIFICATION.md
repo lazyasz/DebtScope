@@ -802,6 +802,26 @@ backend/tests/test_copilot_prompt_injection.py::TestCopilotPromptInjectionResist
 ====================== 155 passed, 81 warnings in 51.06s ======================
 ```
 
+---
+
+## 19. Amendment F: Gitleaks Ignore for Historical Documentation Placeholder
+
+### 19.1 Secret Scanner Finding Analysis
+- **Alert**: GitHub Secret Scanning flagged `AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` in historical commit `84f09aef` at `docs/MANUAL_STEPS.md#L237`.
+- **Classification**: False positive template placeholder in markdown setup documentation (`AIzaSy` followed by 33 `x` characters).
+- **Remediation Policy**: History is preserved without rewriting (`git rebase` / `git filter-repo` avoided to preserve commit integrity and tag ancestry). Added `.gitleaksignore` in repository root referencing the exact commit fingerprint, line, and file.
+
+### 19.2 `.gitleaksignore` Configuration
+```text
+84f09aef3e19fddf4fcf3504fb9ac29112d3e9f3:docs/MANUAL_STEPS.md:google-api-key:237
+84f09aef:docs/MANUAL_STEPS.md:google-api-key:237
+84f09aef:docs/MANUAL_STEPS.md:237
+docs/MANUAL_STEPS.md:google-api-key:237
+docs/MANUAL_STEPS.md:AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+
 
 
 

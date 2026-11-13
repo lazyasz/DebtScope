@@ -978,3 +978,105 @@ backend\tests\test_model_labeling.py ..                                  [100%]
 
 ======================== 2 passed, 1 warning in 0.20s =========================
 ```
+
+
+---
+
+## 22. Item 6: Temporal Backtest (18-Month Cutoff, 12-Month Forward Window, 4 Repositories)
+
+### 22.1 Protocol & Methodology
+As specified in Verification Round 2, the empirical backtest evaluates the predictive validity of DebtScope's scoring engine against real historical software evolution without look-ahead bias:
+1. **Cutoff Timestamp ($T_{\text{cutoff}}$)**: Exactly 18 months prior to the latest commit on the repository's default branch.
+2. **Forward Evaluation Window ($[T_{\text{cutoff}}, T_{\text{forward}}]$)**: 12 months immediately following $T_{\text{cutoff}}$.
+3. **Ground-Truth Target**: Future bug-fixing commit frequency touching each source file during the forward window (identified via SZZ keyword matching on commit messages).
+4. **Zero Look-Ahead Guarantee**:
+   - File manifest at cutoff: `git ls-tree -r --name-only <cutoff_commit>`.
+   - Structural AST metrics: Extracted from cutoff blob snapshot using `git cat-file -p <cutoff_commit>:<fpath>`.
+   - Historical churn and commit velocity: Extracted via `git log --until=<cutoff_timestamp>`.
+   - Inputs sampled from HEAD: **ZERO**.
+5. **Baselines**:
+   - **LOC-Only**: Ranks files strictly by lines of code at cutoff.
+   - **Churn-Only**: Ranks files strictly by historical git line additions + deletions prior to cutoff.
+   - **Random Baseline**: Shuffled random ranking.
+6. **Integrity Rule**: Raw metrics recorded and published without post-hoc tuning of model weights or ranking heuristics.
+
+### 22.2 Empirical Results Across 4 Repositories (Python & JavaScript)
+
+```powershell
+py scripts/temporal_backtest.py
+```
+Output:
+```text
+=================================================================
+STARTING TEMPORAL BACKTEST (ZERO LOOK-AHEAD, 18M CUTOFF, 12M FORWARD)
+=================================================================
+
+=======================================================
+RUNNING TEMPORAL BACKTEST: pallets/flask (Python)
+=======================================================
+[*] Latest commit: 2026-10-30 (epoch: 1793372720)
+[*] Cutoff date (18m prior): 2025-04-30 (commit: b78b5a210b)
+[*] Forward evaluation window: 2025-04-30 -> 2026-05-01 (12 months)
+[*] Total files in cutoff snapshot: 247 | Source files: 52
+[*] Evaluated 51 production source files at cutoff.
+[*] Forward window outcomes: 11 bug-fix touches across 6/51 files (11.8% defect rate)
+  • DebtScope Composite Score  | Spearman rho: +0.4611 (p=0.0007) | AUC: 0.9111
+  • LOC-Only Baseline          | Spearman rho: +0.4992 (p=0.0002) | AUC: 0.9444
+  • Churn-Only Baseline        | Spearman rho: +0.4790 (p=0.0004) | AUC: 0.9259
+  • Random Baseline            | Spearman rho: +0.0033 (p=0.9816) | AUC: 0.4963
+
+=======================================================
+RUNNING TEMPORAL BACKTEST: psf/requests (Python)
+=======================================================
+[*] Latest commit: 2026-10-26 (epoch: 1793034881)
+[*] Cutoff date (18m prior): 2025-04-26 (commit: 4ce9520a1c)
+[*] Forward evaluation window: 2025-04-26 -> 2026-04-27 (12 months)
+[*] Total files in cutoff snapshot: 131 | Source files: 30
+[*] Evaluated 30 production source files at cutoff.
+[*] Forward window outcomes: 15 bug-fix touches across 11/30 files (36.7% defect rate)
+  • DebtScope Composite Score  | Spearman rho: +0.4150 (p=0.0226) | AUC: 0.7273
+  • LOC-Only Baseline          | Spearman rho: +0.0023 (p=0.9902) | AUC: 0.4833
+  • Churn-Only Baseline        | Spearman rho: +0.0597 (p=0.7542) | AUC: 0.5048
+  • Random Baseline            | Spearman rho: +0.1901 (p=0.3142) | AUC: 0.6029
+
+=======================================================
+RUNNING TEMPORAL BACKTEST: expressjs/express (JavaScript)
+=======================================================
+[*] Latest commit: 2026-11-02 (epoch: 1793650526)
+[*] Cutoff date (18m prior): 2025-05-03 (commit: f9954dd317)
+[*] Forward evaluation window: 2025-05-03 -> 2026-05-04 (12 months)
+[*] Total files in cutoff snapshot: 225 | Source files: 84
+[*] Evaluated 83 production source files at cutoff.
+[*] Forward window outcomes: 5 bug-fix touches across 3/83 files (3.6% defect rate)
+  • DebtScope Composite Score  | Spearman rho: +0.2536 (p=0.0207) | AUC: 0.8896
+  • LOC-Only Baseline          | Spearman rho: +0.2744 (p=0.0120) | AUC: 0.9229
+  • Churn-Only Baseline        | Spearman rho: +0.2758 (p=0.0116) | AUC: 0.9250
+  • Random Baseline            | Spearman rho: -0.0560 (p=0.6152) | AUC: 0.4167
+
+=======================================================
+RUNNING TEMPORAL BACKTEST: fastify/fastify (JavaScript)
+=======================================================
+[*] Latest commit: 2026-11-13 (epoch: 1794564323)
+[*] Cutoff date (18m prior): 2025-05-14 (commit: de6ffb1edb)
+[*] Forward evaluation window: 2025-05-14 -> 2026-05-14 (12 months)
+[*] Total files in cutoff snapshot: 385 | Source files: 63
+[*] Evaluated 63 production source files at cutoff.
+[*] Forward window outcomes: 65 bug-fix touches across 26/63 files (41.3% defect rate)
+  • DebtScope Composite Score  | Spearman rho: +0.6796 (p=0.0000) | AUC: 0.8976
+  • LOC-Only Baseline          | Spearman rho: +0.6606 (p=0.0000) | AUC: 0.8857
+  • Churn-Only Baseline        | Spearman rho: +0.7029 (p=0.0000) | AUC: 0.9106
+  • Random Baseline            | Spearman rho: +0.0584 (p=0.6496) | AUC: 0.5073
+
+[+] Report written to docs/BACKTEST.md successfully.
+```
+
+### 22.3 Metric Summary Table
+
+| Repository | Language | Source Files | Defect Rate | DebtScope $\rho$ (p-val) | DebtScope AUC | LOC-Only AUC | Churn-Only AUC | Random AUC |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`pallets/flask`** | Python | 51 | 11.8% | **+0.4611** (0.0007) | **0.9111** | 0.9444 | 0.9259 | 0.4963 |
+| **`psf/requests`** | Python | 30 | 36.7% | **+0.4150** (0.0226) | **0.7273** | 0.4833 | 0.5048 | 0.6029 |
+| **`expressjs/express`** | JavaScript | 83 | 3.6% | **+0.2536** (0.0207) | **0.8896** | 0.9229 | 0.9250 | 0.4167 |
+| **`fastify/fastify`** | JavaScript | 63 | 41.3% | **+0.6796** (0.0000) | **0.8976** | 0.8857 | 0.9106 | 0.5073 |
+
+Detailed analysis and limitations documented in [BACKTEST.md](file:///c:/Users/dhruv/.gemini/antigravity-ide/scratch/DebtScope/docs/BACKTEST.md).

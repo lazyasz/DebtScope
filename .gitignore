@@ -19,6 +19,10 @@ cloudflared*
 *.sqlite
 *.sqlite3
 
+# Backtest Repositories & Scratch
+data/backtest_repos/
+
+
 # Environment & Credentials
 .env
 .env.local

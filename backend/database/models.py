@@ -222,7 +222,7 @@ class PriorityScore(Base):
     
     # Missing dimensions & dynamic coverage metadata (ADR 010)
     scored_dimensions_count = Column(Integer, default=5)
-    dimension_coverage = Column(String(50), default="5 of 5 dimensions")
+    dimension_coverage = Column(String(255), default="5 of 5 dimensions")
     missing_dimensions_json = Column(Text, default="[]")
     
     calculated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

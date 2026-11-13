@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from unittest.mock import patch
 import pytest
@@ -151,9 +152,11 @@ class TestAnalysisJobEndpoints:
         """User in workspace A cannot poll a job created in workspace B."""
         db = SessionLocal()
         try:
-            # Create another isolated workspace and a job in it
+            # Create another isolated workspace and commit it before referencing in job foreign key
             ws_other = Workspace(id="ws_private_other", name="Other Workspace", slug="other-ws")
             db.merge(ws_other)
+            db.commit()
+
             job = AnalysisJob(
                 id="job_private_123",
                 workspace_id="ws_private_other",
@@ -179,23 +182,26 @@ class TestAnalysisJobEndpoints:
     def test_recover_stale_jobs_on_restart(self):
         """
         Verifies that recover_stale_jobs identifies in-flight jobs (QUEUED, CLONING, ANALYZING, MINING)
-        and transitions them to FAILED with a clear restart notice, leaving finished jobs intact.
+        with stale heartbeats (> 120s) and transitions them to FAILED with a clear restart notice,
+        leaving finished jobs intact.
         """
         from backend.services.analysis_worker import recover_stale_jobs
         db = SessionLocal()
+        now = datetime.now(timezone.utc)
+        stale_hb = now - timedelta(seconds=300)
         try:
-            # Create in-flight jobs
-            j_queued = AnalysisJob(id="job_stale_queued", workspace_id="ws_demo", repo_url="https://github.com/test/repo1", status="QUEUED")
-            j_analyzing = AnalysisJob(id="job_stale_analyzing", workspace_id="ws_demo", repo_url="https://github.com/test/repo2", status="ANALYZING")
-            j_mining = AnalysisJob(id="job_stale_mining", workspace_id="ws_demo", repo_url="https://github.com/test/repo3", status="MINING")
-            j_completed = AnalysisJob(id="job_stale_completed", workspace_id="ws_demo", repo_url="https://github.com/test/repo4", status="COMPLETED")
+            # Create in-flight jobs with stale heartbeats
+            j_queued = AnalysisJob(id="job_stale_queued", workspace_id="ws_demo", repo_url="https://github.com/test/repo1", status="QUEUED", last_heartbeat=stale_hb)
+            j_analyzing = AnalysisJob(id="job_stale_analyzing", workspace_id="ws_demo", repo_url="https://github.com/test/repo2", status="ANALYZING", last_heartbeat=stale_hb)
+            j_mining = AnalysisJob(id="job_stale_mining", workspace_id="ws_demo", repo_url="https://github.com/test/repo3", status="MINING", last_heartbeat=stale_hb)
+            j_completed = AnalysisJob(id="job_stale_completed", workspace_id="ws_demo", repo_url="https://github.com/test/repo4", status="COMPLETED", last_heartbeat=stale_hb)
             db.merge(j_queued)
             db.merge(j_analyzing)
             db.merge(j_mining)
             db.merge(j_completed)
             db.commit()
 
-            recovered_count = recover_stale_jobs(db)
+            recovered_count = recover_stale_jobs(db, stale_threshold_seconds=120)
             assert recovered_count >= 3
 
             # Check statuses

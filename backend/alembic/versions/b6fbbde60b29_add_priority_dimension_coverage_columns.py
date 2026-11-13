@@ -27,7 +27,7 @@ def upgrade() -> None:
         if 'scored_dimensions_count' not in cols:
             batch_op.add_column(sa.Column('scored_dimensions_count', sa.Integer(), nullable=True, server_default='5'))
         if 'dimension_coverage' not in cols:
-            batch_op.add_column(sa.Column('dimension_coverage', sa.String(length=50), nullable=True, server_default='5 of 5 dimensions'))
+            batch_op.add_column(sa.Column('dimension_coverage', sa.String(length=255), nullable=True, server_default='5 of 5 dimensions'))
         if 'missing_dimensions_json' not in cols:
             batch_op.add_column(sa.Column('missing_dimensions_json', sa.Text(), nullable=True, server_default='[]'))
 

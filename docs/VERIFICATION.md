@@ -933,3 +933,48 @@ Category breakdown: {'source': 50, 'test': 92}
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`pallets/flask`** | `tests/test_basic.py` | `test` | `src/flask/app.py` | `source` | 4 test/doc files removed from default top 10; `tests/` and `docs/conf.py` routed to Non-Source view. |
 | **`expressjs/express`** | `lib/response.js` | `source` | `lib/response.js` | `source` | All 92 test files segregated; core source files (`lib/application.js`, `lib/request.js`) accurately ranked without test noise. |
+
+
+---
+
+## 21. Item 5: Defect Prediction Model Labeling, Calibration Status & Language Bounds
+
+### 21.1 Defect Prediction Model Characterization
+A comprehensive audit of the machine learning engine (`ml_engine/src/ml_engine/train_on_real_data.py`, `ml_engine/models/`, `backend/services/analysis_worker.py`) establishes the following factual characteristics of "Defect Prob":
+
+| Dimension | Measured Architecture / Implementation Detail |
+| :--- | :--- |
+| **Target Variable** | **`fault_count`** (continuous count $\ge 0$ of post-release bug-introducing commits identified via SZZ git history mining in The Technical Debt Dataset) for regression; and **`defects`** (binary boolean) in NASA JM1/PC1 datasets. In `analysis_worker.py`, defect probability is derived as an empirical proxy: `min(0.95, max(0.05, tr_score / 110.0))`. |
+| **Scale & Bounds** | Scaled as continuous probability $[0.0, 1.0]$ and displayed in UI as a percentage $[0.0\%, 100.0\%]$ with hard clamping $[5.0\%, 95.0\%]$ to prevent artificial certainty. |
+| **Calibration Status** | **Uncalibrated**. Neither Platt scaling (`CalibratedClassifierCV(method='sigmoid')`) nor Isotonic regression was fitted against cross-project holdouts. Output is an uncalibrated empirical proxy. |
+| **Training Languages** | **Java** (100% of The Technical Debt Dataset across Apache Software Foundation repositories: Lucene, Commons, Derby, Ant, Camel, etc., identified by `is_java=1`) and **C / C++** (NASA JM1 and PC1 flight software benchmarks). |
+| **Non-Training Languages** | **Python, JavaScript, TypeScript, Go, Ruby, PHP, Rust, Shell, etc.** were **NOT** present in the model training corpus. |
+| **Cross-Validation Grouping** | **Random 5-Fold K-Fold / random train-test split**, **NOT `GroupKFold`** grouped by `project_id`. File-level records from the same repository appeared in both training and test folds. |
+
+### 21.2 Implemented Remediations
+1. **API Schema Contract Enriched** (`backend/schemas/priority.py`):
+   - `is_experimental: bool`: Evaluated dynamically (`True` if language is outside `{"java", "c", "c++", "cpp"}`).
+   - `model_calibration_status: str = "uncalibrated_heuristic"`: Explicitly alerts consumers that probabilities are uncalibrated empirical proxies.
+   - `defect_probability_label: str = "Defect Probability (Uncalibrated SZZ Proxy)"`: Replaces generic "Defect Prob" labeling.
+   - `confidence_score: float`: Reflects grounded calibration bounds.
+
+2. **Confidence Degradation for Non-Training Languages** (`backend/services/analysis_worker.py`, `backend/services/priority_service.py`):
+   - Files written in non-training languages (such as Python in `pallets/flask` or JavaScript in `expressjs/express`) have confidence strictly capped at $\le 0.70$ (compared to $0.88 - 0.98$ for native Java/C++ source code with verified integration signals).
+
+3. **Frontend UI Transparency** (`frontend/src/pages/Priorities.jsx`):
+   - Amber `EXPERIMENTAL` badge rendered adjacent to file path in both desktop table and mobile card views for all files where `item.is_experimental === true`.
+   - Tooltip: *"Experimental: Model trained on Java/C++; transfer to this language is uncalibrated."*
+
+### 21.3 Test Suite Verification
+```text
+$ py -m pytest backend/tests/test_model_labeling.py
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collected 2 items
+
+backend\tests\test_model_labeling.py ..                                  [100%]
+
+======================== 2 passed, 1 warning in 0.20s =========================
+```

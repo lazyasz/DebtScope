@@ -371,6 +371,14 @@ export default function Priorities() {
                     <span className="font-mono font-semibold text-xs text-[#0f1015] truncate">
                       {fileName}
                     </span>
+                    {item.is_experimental && (
+                      <span 
+                        className="px-1.5 py-0.2 text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded shrink-0"
+                        title="Experimental: Model trained on Java/C++; transfer to this language is uncalibrated."
+                      >
+                        EXPERIMENTAL
+                      </span>
+                    )}
                   </div>
                   <span
                     className="px-2 py-0.5 rounded font-mono text-[10px] font-bold shrink-0 border"
@@ -477,6 +485,14 @@ export default function Priorities() {
                         <span className="font-mono font-medium text-[#0f1015] group-hover:text-[#7048e8] transition text-xs">
                           {fileName}
                         </span>
+                        {item.is_experimental && (
+                          <span 
+                            className="px-1.5 py-0.5 text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded shrink-0"
+                            title="Experimental: Model trained on Java/C++; transfer to this language is uncalibrated."
+                          >
+                            EXPERIMENTAL
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-center font-mono font-bold text-[#5b42a5] whitespace-nowrap text-xs">

@@ -65,6 +65,10 @@ class RankedFilePriority(BaseModel):
     quadrant: str
     roi_score: float
     file_category: str = "source"
+    is_experimental: bool = False
+    model_calibration_status: str = "uncalibrated_heuristic"
+    confidence_score: float = 0.72
+    defect_probability_label: str = "Defect Probability (Uncalibrated SZZ Proxy)"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []
@@ -95,6 +99,10 @@ class FileDetailResponse(BaseModel):
     quadrant: str
     roi_score: float
     file_category: str = "source"
+    is_experimental: bool = False
+    model_calibration_status: str = "uncalibrated_heuristic"
+    confidence_score: float = 0.72
+    defect_probability_label: str = "Defect Probability (Uncalibrated SZZ Proxy)"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []

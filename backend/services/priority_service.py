@@ -249,6 +249,12 @@ class PriorityService:
                 except Exception:
                     pass
 
+            lang_clean = (file_obj.language or "").strip().lower()
+            is_experimental = lang_clean not in {"java", "c", "c++", "cpp"}
+            conf = file_obj.prediction.confidence_score if file_obj.prediction else 0.72
+            if is_experimental:
+                conf = min(0.70, conf)
+
             results.append(
                 RankedFilePriority(
                     rank=s.rank,
@@ -258,6 +264,10 @@ class PriorityService:
                     language=file_obj.language,
                     lines_of_code=file_obj.lines_of_code,
                     file_category=getattr(file_obj, "file_category", "source") or "source",
+                    is_experimental=is_experimental,
+                    model_calibration_status="uncalibrated_heuristic",
+                    confidence_score=conf,
+                    defect_probability_label="Defect Probability (Uncalibrated SZZ Proxy)",
                     technical_risk=s.composite_technical_risk,
                     predicted_risk=file_obj.prediction.predicted_future_risk if file_obj.prediction else s.composite_technical_risk,
                     business_impact=s.composite_business_impact,
@@ -351,6 +361,12 @@ class PriorityService:
             except Exception:
                 pass
 
+        lang_clean = (file_obj.language or "").strip().lower()
+        is_experimental = lang_clean not in {"java", "c", "c++", "cpp"}
+        conf = file_obj.prediction.confidence_score if file_obj.prediction else 0.72
+        if is_experimental:
+            conf = min(0.70, conf)
+
         return FileDetailResponse(
             file=file_obj.file_name,
             file_id=file_obj.id,
@@ -368,6 +384,11 @@ class PriorityService:
             action_summary=rec_action,
             quadrant=score.quadrant,
             roi_score=score.roi_score,
+            file_category=getattr(file_obj, "file_category", "source") or "source",
+            is_experimental=is_experimental,
+            model_calibration_status="uncalibrated_heuristic",
+            confidence_score=conf,
+            defect_probability_label="Defect Probability (Uncalibrated SZZ Proxy)",
             scored_dimensions_count=getattr(score, "scored_dimensions_count", 5) or 5,
             dimension_coverage=getattr(score, "dimension_coverage", "5 of 5 dimensions") or "5 of 5 dimensions",
             missing_dimensions=detail_missing_list,

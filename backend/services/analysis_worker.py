@@ -230,14 +230,22 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 )
                 db.add(bctx_obj)
 
-                # Save ML Prediction (Defect probability calibrated from churn & complexity)
+                # Save ML Prediction (Defect probability empirical SZZ proxy, experimental on non-training languages)
+                lang_clean = (f_info.get("language") or "").strip().lower()
+                TRAINING_LANGUAGES = {"java", "c", "c++", "cpp"}
+                is_experimental_lang = lang_clean not in TRAINING_LANGUAGES
+
                 pred_risk = min(99.0, max(10.0, tr_score * 0.95))
                 defect_prob = min(0.95, max(0.05, tr_score / 110.0))
                 cov_prov = f_info.get("coverage_provenance", "ESTIMATED")
                 # Exclude SIMULATED data from confidence: ONLY live verified INTEGRATION boosts confidence
                 has_jira_signal = len(jira_issues) > 0 and bctx_provenance == "INTEGRATION"
                 base_conf = 0.88 if cov_prov == "MEASURED" else 0.72
-                confidence = round(min(0.98, base_conf + (0.10 if has_jira_signal else 0.0)), 2)
+                if is_experimental_lang:
+                    confidence = min(0.70, base_conf)
+                else:
+                    confidence = round(min(0.98, base_conf + (0.10 if has_jira_signal else 0.0)), 2)
+
                 pred_obj = MLPrediction(
                     workspace_id=workspace_id,
                     file_id=file_obj.id,
@@ -245,7 +253,7 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                     defect_probability=round(defect_prob, 2),
                     churn_risk_score=round(min(100.0, float(churn_commits * 5)), 1),
                     confidence_score=confidence,
-                    model_version="real-szz-rf-v2.1",
+                    model_version="szz-rf-experimental-transfer" if is_experimental_lang else "real-szz-rf-v2.1",
                 )
                 db.add(pred_obj)
 

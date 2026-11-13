@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     TOKEN_ENCRYPTION_KEY: str = ""
 
+    # ── Background Worker & Job Orchestration Limits ────────────────────────
+    WORKER_MAX_GLOBAL_CONCURRENT_JOBS: int = 2
+    WORKER_MAX_WORKSPACE_CONCURRENT_JOBS: int = 1
+    WORKER_JOB_TIMEOUT_SECONDS: int = 600
+    WORKER_HEARTBEAT_STALE_SECONDS: int = 120
+
     # ── Priority Engine Weights — 5D Formula (sum = 1.00, viva-locked) ───────
     WEIGHT_TECHNICAL_RISK: float = Field(default=0.35, ge=0.0, le=1.0)
     WEIGHT_BUSINESS_IMPACT: float = Field(default=0.30, ge=0.0, le=1.0)

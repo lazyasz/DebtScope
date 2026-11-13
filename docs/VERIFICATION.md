@@ -1138,3 +1138,53 @@ backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_scan_job_liv
 
 ================= 1 passed, 6 deselected, 1 warning in 11.72s =================
 ```
+
+
+---
+
+## 24. Item 8: Worker Concurrency Caps, Heartbeats, Timeouts & Startup Recovery
+
+### 24.1 Architecture & Implementation
+The analysis worker subsystem (`backend/services/analysis_worker.py`, `backend/api/jobs_routes.py`, `backend/database/models.py`) has been upgraded with enterprise concurrency controls and fault-tolerant heartbeat monitoring:
+
+1. **Global Concurrency Ceiling**:
+   - `WORKER_MAX_GLOBAL_CONCURRENT_JOBS = 2` (configured via `backend/config.py`).
+   - If active jobs system-wide $\ge 2$, incoming scan requests are rejected with `HTTP 429 Too Many Requests`.
+
+2. **Per-Workspace Concurrency Isolation**:
+   - `WORKER_MAX_WORKSPACE_CONCURRENT_JOBS = 1`.
+   - Prevents duplicate overlapping scans within the same tenant, returning `HTTP 409 Conflict`.
+
+3. **Per-Job Execution Timeout**:
+   - Stored on `AnalysisJob.timeout_seconds` (default 600 seconds).
+   - Preemptively checked before cloning and between pipeline stages; jobs exceeding their timeout transition to `FAILED` with an explicit diagnostic message.
+
+4. **Heartbeat-Driven Fault Recovery**:
+   - Added `AnalysisJob.last_heartbeat` timestamp column via Alembic migration `f4a5b6c7d8e9`.
+   - Updated at each pipeline transition (`CLONING`, `ANALYZING`, `MINING`, `PERSISTING`, `COMPLETED`).
+   - Server startup recovery (`recover_stale_jobs`) checks elapsed time against `WORKER_HEARTBEAT_STALE_SECONDS` (120s):
+     - Stale jobs ($> 120\text{s}$) are transitioned to `FAILED`.
+     - Active jobs with fresh heartbeats ($\le 120\text{s}$) are preserved without interruption.
+
+5. **Roadmap Documentation**:
+   - Authored [WORKER_ARCHITECTURE.md](file:///c:/Users/dhruv/.gemini/antigravity-ide\scratch\DebtScope\docs\WORKER_ARCHITECTURE.md) detailing Celery/Redis dedicated worker process separation as the next architecture step.
+
+### 24.2 Automated Test Verification
+```powershell
+py -m pytest backend/tests/test_worker_heartbeat.py -v
+```
+Output:
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+configfile: pytest.ini
+collected 4 items
+
+backend/tests/test_worker_heartbeat.py::TestWorkerConcurrencyAndLimits::test_per_workspace_concurrency_limit PASSED [ 25%]
+backend/tests/test_worker_heartbeat.py::TestWorkerConcurrencyAndLimits::test_global_concurrency_limit PASSED [ 50%]
+backend/tests/test_worker_heartbeat.py::TestWorkerHeartbeatRecovery::test_heartbeat_differentiates_active_vs_stale_jobs PASSED [ 75%]
+backend/tests/test_worker_heartbeat.py::TestWorkerHeartbeatRecovery::test_per_job_timeout_detection PASSED [100%]
+
+======================== 4 passed, 1 warning in 0.46s =========================
+```

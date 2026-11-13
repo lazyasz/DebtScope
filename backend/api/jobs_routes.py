@@ -16,9 +16,10 @@ from sqlalchemy.orm import Session
 
 from backend.database.connection import get_db
 from backend.database.tenant import get_current_workspace, get_current_user
-from backend.database.models import AnalysisJob, Workspace, User
+from backend.database.models import AnalysisJob, Workspace, User, utc_now
 from backend.services.git_cloner import validate_repo_url, SSRFValidationError
 from backend.services.analysis_worker import run_analysis_pipeline
+from backend.config import settings
 
 router = APIRouter(prefix="/jobs", tags=["Background Analysis Jobs"])
 
@@ -41,6 +42,8 @@ class JobStatusResponse(BaseModel):
     result_summary: Optional[Dict[str, Any]]
     created_at: Optional[str]
     completed_at: Optional[str]
+    last_heartbeat: Optional[str] = None
+    timeout_seconds: Optional[int] = 600
 
 
 @router.post("/scan", status_code=status.HTTP_202_ACCEPTED, summary="Trigger Background Repository Scan")
@@ -64,8 +67,35 @@ def trigger_repository_scan(
             detail=f"Security Validation Error: {str(e)}",
         )
 
-    # 2. Create Job in DB
+    # 2. Concurrency checks
+    ACTIVE_STATUSES = ["QUEUED", "CLONING", "ANALYZING", "MINING"]
+
+    # 2a. Per-workspace concurrency check
+    ws_active_count = db.query(AnalysisJob).filter(
+        AnalysisJob.workspace_id == workspace.id,
+        AnalysisJob.status.in_(ACTIVE_STATUSES),
+    ).count()
+    max_ws = getattr(settings, "WORKER_MAX_WORKSPACE_CONCURRENT_JOBS", 1)
+    if ws_active_count >= max_ws:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An analysis job is already running for this workspace (limit: {max_ws}). Please wait for it to complete.",
+        )
+
+    # 2b. Global concurrency check
+    global_active_count = db.query(AnalysisJob).filter(
+        AnalysisJob.status.in_(ACTIVE_STATUSES),
+    ).count()
+    max_global = getattr(settings, "WORKER_MAX_GLOBAL_CONCURRENT_JOBS", 2)
+    if global_active_count >= max_global:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Maximum global concurrent scan capacity reached ({max_global} active jobs). Please retry shortly.",
+        )
+
+    # 3. Create Job in DB
     job_id = f"job_{uuid.uuid4().hex[:12]}"
+    job_timeout = getattr(settings, "WORKER_JOB_TIMEOUT_SECONDS", 600)
     job = AnalysisJob(
         id=job_id,
         workspace_id=workspace.id,
@@ -73,12 +103,14 @@ def trigger_repository_scan(
         status="QUEUED",
         stage="Queued for analysis...",
         progress_pct=0,
+        last_heartbeat=utc_now(),
+        timeout_seconds=job_timeout,
     )
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    # 3. Queue Background Pipeline
+    # 4. Queue Background Pipeline
     background_tasks.add_task(run_analysis_pipeline, job_id, payload.auth_token)
 
     return {

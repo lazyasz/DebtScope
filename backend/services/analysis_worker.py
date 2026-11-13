@@ -63,34 +63,68 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
         workspace_id = job.workspace_id
         repo_url = job.repo_url
 
+        # Helper to check per-job timeout
+        def _check_timeout() -> bool:
+            if not job or not job.started_at:
+                return False
+            st = job.started_at
+            if st.tzinfo is None:
+                st = st.replace(tzinfo=timezone.utc)
+            limit = job.timeout_seconds or getattr(settings, "WORKER_JOB_TIMEOUT_SECONDS", 600)
+            if (utc_now() - st).total_seconds() > limit:
+                job.status = "FAILED"
+                job.stage = "Analysis timed out."
+                job.error_message = f"Job exceeded execution timeout of {limit}s."
+                job.completed_at = utc_now()
+                db.commit()
+                logger.error("Job %s exceeded timeout of %ds", job.id, limit)
+                return True
+            return False
+
         # Stage 1: Initializing
+        if not job.started_at:
+            job.started_at = utc_now()
         job.status = "CLONING"
         job.stage = "Connecting to repository and cloning..."
         job.progress_pct = 15
-        job.started_at = utc_now()
+        job.last_heartbeat = utc_now()
         db.commit()
+
+        # Check timeout before entering heavy cloning
+        if _check_timeout():
+            return
 
         # Stage 2: Sandboxed Clone
         with SandboxedGitCloner(repo_url, auth_token=auth_token) as (temp_dir, repo_name):
+
             job.status = "ANALYZING"
             job.stage = "Parsing source code with multi-language AST engine..."
             job.progress_pct = 40
+            job.last_heartbeat = utc_now()
             db.commit()
 
             # Stage 3: Multi-Language AST Analysis (lizard)
             ast_files, cov_summary = scan_repository_tree(temp_dir)
 
+            if _check_timeout():
+                return
+
             job.status = "MINING"
             job.stage = "Mining git history for churn, bus factor, and commit velocity..."
             job.progress_pct = 65
+            job.last_heartbeat = utc_now()
             db.commit()
 
             # Stage 4: Git History & Churn Mining
             miner = GitMiner(temp_dir)
             git_history = miner.mine_file_history()
 
+            if _check_timeout():
+                return
+
             job.stage = "Computing 5D technical debt prioritization scores..."
             job.progress_pct = 85
+            job.last_heartbeat = utc_now()
             db.commit()
 
             # Stage 5: Database Persistence under Tenant Workspace Isolation
@@ -317,23 +351,47 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
         db.close()
 
 
-def recover_stale_jobs(db: Session) -> int:
+def recover_stale_jobs(db: Session, stale_threshold_seconds: Optional[int] = None) -> int:
     """
-    Finds in-flight jobs (QUEUED, CLONING, ANALYZING, MINING) left behind after a process crash/restart
-    and marks them as FAILED with an informative message.
+    Finds in-flight jobs (QUEUED, CLONING, ANALYZING, MINING) whose worker heartbeat is stale
+    (older than stale_threshold_seconds, default 120s) and marks them as FAILED.
+    Jobs with an active, fresh heartbeat are preserved intact.
     Returns the count of recovered stale jobs.
     """
-    stale_jobs = db.query(AnalysisJob).filter(
+    if stale_threshold_seconds is None:
+        stale_threshold_seconds = getattr(settings, "WORKER_HEARTBEAT_STALE_SECONDS", 120)
+
+    now = utc_now()
+    active_jobs = db.query(AnalysisJob).filter(
         AnalysisJob.status.in_(["QUEUED", "CLONING", "ANALYZING", "MINING"])
     ).all()
-    count = len(stale_jobs)
-    for j in stale_jobs:
-        j.status = "FAILED"
-        j.stage = "Analysis interrupted by server restart."
-        j.error_message = "Analysis job interrupted by server restart. Please re-trigger analysis."
-        j.completed_at = utc_now()
-    if count > 0:
+
+    recovered_count = 0
+    for j in active_jobs:
+        hb = j.last_heartbeat
+        if hb is not None:
+            if hb.tzinfo is None:
+                hb = hb.replace(tzinfo=timezone.utc)
+            elapsed_sec = (now - hb).total_seconds()
+        else:
+            # No heartbeat recorded -> immediately stale (legacy or mock record)
+            elapsed_sec = 999999.0
+
+        if elapsed_sec > stale_threshold_seconds:
+            j.status = "FAILED"
+            j.stage = "Analysis interrupted by server restart (stale worker heartbeat)."
+            j.error_message = (
+                f"Analysis job interrupted by server restart (stale worker heartbeat: "
+                f"{int(elapsed_sec)}s > {stale_threshold_seconds}s threshold). Please re-trigger analysis."
+            )
+            j.completed_at = now
+            recovered_count += 1
+            logger.warning("Failing stale job %s (last heartbeat was %ds ago)", j.id, int(elapsed_sec))
+        else:
+            logger.info("Preserving active job %s (worker heartbeat is fresh: %ds ago)", j.id, int(elapsed_sec))
+
+    if recovered_count > 0:
         db.commit()
-        logger.warning("Recovered %d stale in-flight analysis jobs on startup.", count)
-    return count
+        logger.warning("Recovered %d stale in-flight analysis jobs on startup.", recovered_count)
+    return recovered_count
 

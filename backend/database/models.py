@@ -296,6 +296,8 @@ class AnalysisJob(Base):
     created_at = Column(DateTime, default=utc_now)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    last_heartbeat = Column(DateTime, nullable=True, default=utc_now)
+    timeout_seconds = Column(Integer, default=600)
 
 
 class CopilotConversation(Base):

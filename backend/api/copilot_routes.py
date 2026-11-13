@@ -28,6 +28,7 @@ class ChatMessagePayload(BaseModel):
     conversation_id: Optional[str] = None
     repository_id: Optional[int] = None
     stream: bool = True
+    user_confirmation: bool = False
 
 
 class ConversationSummary(BaseModel):

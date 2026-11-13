@@ -108,13 +108,14 @@ COPILOT_TOOL_SCHEMAS = [
     },
     {
         "name": "create_jira_issue",
-        "description": "Creates a Jira refactoring ticket for a prioritized technical debt component.",
+        "description": "Creates a Jira refactoring ticket for a prioritized technical debt component. Requires confirmed=true server-side gate.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path_or_id": {"type": "string", "description": "Target file to create ticket for"},
                 "summary": {"type": "string", "description": "Optional custom summary/title for the ticket"},
                 "issue_type": {"type": "string", "enum": ["Task", "Bug", "Story"], "description": "Issue type (default: Task)"},
+                "confirmed": {"type": "boolean", "description": "Explicit user confirmation flag required to execute the write."},
             },
             "required": ["file_path_or_id"],
         },
@@ -132,11 +133,12 @@ COPILOT_TOOL_SCHEMAS = [
     },
     {
         "name": "export_notion_report",
-        "description": "Exports an executive technical debt report and sprint ROI matrix into the connected Notion workspace.",
+        "description": "Exports an executive technical debt report and sprint ROI matrix into the connected Notion workspace. Requires confirmed=true server-side gate.",
         "parameters": {
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Optional custom report title"},
+                "confirmed": {"type": "boolean", "description": "Explicit user confirmation flag required to execute the write."},
             },
         },
     },
@@ -485,11 +487,29 @@ class CopilotToolRegistry:
             "verification": verification,
         }
 
-    def create_jira_issue(self, file_path_or_id: Union[str, int], summary: Optional[str] = None, issue_type: str = "Task") -> Dict[str, Any]:
+    def create_jira_issue(
+        self,
+        file_path_or_id: Union[str, int],
+        summary: Optional[str] = None,
+        issue_type: str = "Task",
+        confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """Creates a Jira refactoring ticket for a file within tenant boundaries."""
         file_obj = self._resolve_file(file_path_or_id)
         if not file_obj:
             return {"error": f"File '{file_path_or_id}' not found in current workspace."}
+
+        # Server-side confirmation gate: if explicitly False, held pending confirmation
+        if confirmed is False:
+            return {
+                "action_required": "CONFIRMATION_REQUIRED",
+                "gate": "server_side_confirmation_gate",
+                "tool": "create_jira_issue",
+                "file_path": file_obj.file_path,
+                "summary": summary or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}",
+                "issue_type": issue_type,
+                "message": f"Action 'create_jira_issue' held: server-side confirmation required (confirmed=true).",
+            }
 
         ps = file_obj.priority_score
         bctx = file_obj.business_context
@@ -557,8 +577,18 @@ class CopilotToolRegistry:
             "total_count": len(links),
         }
 
-    def export_notion_report(self, title: Optional[str] = None) -> Dict[str, Any]:
+    def export_notion_report(self, title: Optional[str] = None, confirmed: Optional[bool] = None) -> Dict[str, Any]:
         """Exports technical debt audit report to Notion."""
+        # Server-side confirmation gate: if explicitly False, held pending confirmation
+        if confirmed is False:
+            return {
+                "action_required": "CONFIRMATION_REQUIRED",
+                "gate": "server_side_confirmation_gate",
+                "tool": "export_notion_report",
+                "title": title or "Executive Technical Debt & ROI Audit",
+                "message": f"Action 'export_notion_report' held: server-side confirmation required (confirmed=true).",
+            }
+
         import asyncio
         from backend.services.notion_service import create_notion_audit_report
         res = asyncio.run(create_notion_audit_report(title=title))
@@ -577,10 +607,22 @@ class CopilotToolRegistry:
         return res
 
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Dispatches tool call safely."""
+        """Dispatches tool call safely with server-side confirmation gate."""
         handler = getattr(self, tool_name, None)
         if not handler or not callable(handler) or tool_name.startswith("_"):
             return {"error": f"Unknown tool: '{tool_name}'"}
+
+        # Server-side write confirmation gate on external modifying operations
+        if tool_name in ("create_jira_issue", "export_notion_report"):
+            is_confirmed = arguments.get("confirmed") is True
+            if not is_confirmed:
+                return {
+                    "action_required": "CONFIRMATION_REQUIRED",
+                    "gate": "server_side_confirmation_gate",
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "message": f"Write action '{tool_name}' requires explicit user confirmation. Blocked on server.",
+                }
 
         try:
             return handler(**arguments)

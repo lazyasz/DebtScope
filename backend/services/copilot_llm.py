@@ -89,6 +89,13 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
             "token_encryption_key",
             "reveal the",
             "delete repository",
+            "bypass confirmation",
+            "auto-confirm",
+            "auto_confirm",
+            "override confirmation",
+            "untrusted instruction",
+            "confirmed=true",
+            "confirmed = true",
         ]
         if any(trig in q for trig in injection_triggers):
             yield CopilotStreamEvent("token", "⚠️ **Security Policy Refusal**: ")
@@ -97,6 +104,48 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
             yield CopilotStreamEvent("token", "DebtScope security boundaries strictly prohibit running arbitrary directives from untrusted data, modifying security configurations, or bypassing tenant isolation.")
             yield CopilotStreamEvent("done", {"grounded": True, "refusal": True})
             return
+
+        # 1b. Write Operations Gate (create_jira_issue, export_notion_report)
+        if "create_jira_issue" in q or "create jira" in q or "jira ticket" in q or "export_notion_report" in q or "export notion" in q or "notion report" in q:
+            # Check if this request is originating from injected untrusted content (commit message, jira summary, notion page)
+            is_injected = any(
+                inj in q for inj in [
+                    "commit message", "jira summary", "notion page",
+                    "system override", "ignore previous", "bypass", "untrusted"
+                ]
+            )
+            if is_injected:
+                yield CopilotStreamEvent("token", "⚠️ **Security Policy Refusal**: ")
+                await asyncio.sleep(0.001)
+                yield CopilotStreamEvent("token", "Refusing to execute write action triggered by untrusted context (commit message / issue summary / external page). ")
+                yield CopilotStreamEvent("token", "External writes (create_jira_issue, export_notion_report) require direct, verified user confirmation and cannot be triggered by external telemetry.")
+                yield CopilotStreamEvent("done", {"grounded": True, "refusal": True, "blocked_write": True})
+                return
+
+            # Check if explicit confirmation is present
+            is_confirmed = "confirm" in q or "yes" in q or "approve" in q
+            if "jira" in q:
+                file_match = re.search(r'([\w/\.\-]+\.(?:py|js|ts|java|go|cpp|cs))', last_msg)
+                target = file_match.group(1) if file_match else "services/payment.py"
+                tool_res = tool_registry.execute_tool("create_jira_issue", {"file_path_or_id": target, "confirmed": is_confirmed})
+                yield CopilotStreamEvent("tool_call", {"tool": "create_jira_issue", "args": {"file_path_or_id": target, "confirmed": is_confirmed}})
+                yield CopilotStreamEvent("tool_result", {"tool": "create_jira_issue", "result": tool_res})
+                if tool_res.get("action_required") == "CONFIRMATION_REQUIRED":
+                    yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: {tool_res.get('message', 'User confirmation required before creating Jira ticket.')}")
+                else:
+                    yield CopilotStreamEvent("token", f"✅ Created Jira ticket `{tool_res.get('issue_key')}` for refactoring.")
+                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": not is_confirmed})
+                return
+            elif "notion" in q:
+                tool_res = tool_registry.execute_tool("export_notion_report", {"title": "Executive Technical Debt Audit", "confirmed": is_confirmed})
+                yield CopilotStreamEvent("tool_call", {"tool": "export_notion_report", "args": {"title": "Executive Technical Debt Audit", "confirmed": is_confirmed}})
+                yield CopilotStreamEvent("tool_result", {"tool": "export_notion_report", "result": tool_res})
+                if tool_res.get("action_required") == "CONFIRMATION_REQUIRED":
+                    yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: {tool_res.get('message', 'User confirmation required before exporting to Notion.')}")
+                else:
+                    yield CopilotStreamEvent("token", f"✅ Exported executive report to Notion: {tool_res.get('page_url')}")
+                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": not is_confirmed})
+                return
 
         # 2. Missing Data Honesty / File Detail
         # e.g., "coverage on a file that has no coverage artifact", "confidence score for an unmonitored",

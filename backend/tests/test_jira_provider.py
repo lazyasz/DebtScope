@@ -1,0 +1,255 @@
+"""
+Unit & Integration Tests for Atlassian Jira Cloud Integration (Phase 4).
+Tests OAuth 2.0 (3LO) lifecycle, commit regex parsing, 5D business signal calculation,
+ticket write-back, and Copilot Jira tools.
+"""
+
+import pytest
+import asyncio
+from datetime import datetime, timezone, timedelta
+from backend.integrations.jira_provider import JiraProvider
+from backend.services.jira_service import (
+    parse_jira_keys_from_commit,
+    derive_jira_business_signals,
+    create_jira_issue,
+    bulk_export_to_jira,
+)
+from backend.services.copilot_tools import CopilotToolRegistry
+from backend.database.models import (
+    Workspace,
+    Repository,
+    SourceFile,
+    BusinessContext,
+    PriorityScore,
+    EngineeringMetric,
+    MLPrediction,
+    JiraIssueLink,
+)
+
+
+@pytest.fixture
+def jira_provider():
+    return JiraProvider()
+
+
+def test_jira_auth_url_generation(jira_provider):
+    """Verifies OAuth 2.0 (3LO) authorization URL generation."""
+    url = jira_provider.get_authorization_url(state="test_state_123")
+    assert "state=test_state_123" in url
+    assert "jira" in url
+
+
+def test_jira_exchange_code_sandbox(jira_provider):
+    """Tests exchanging code in sandbox mode returns simulated access and refresh tokens."""
+    res = asyncio.run(jira_provider.exchange_code("jira_mock_auth_code_2026"))
+    assert "access_token" in res
+    assert "refresh_token" in res
+    assert res["expires_in"] == 3600
+    assert "user" in res
+    assert res["user"]["name"] == "Dhruv Patel"
+
+
+def test_jira_token_refresh(jira_provider):
+    """Tests token refresh lifecycle."""
+    res = asyncio.run(jira_provider.refresh_token("jira_mock_refresh_token_99182371"))
+    assert "access_token" in res
+    assert "refresh_token" in res
+    assert res["expires_in"] == 3600
+
+
+def test_parse_jira_keys_from_commit():
+    """Tests extracting Jira issue keys from git commit messages."""
+    msg1 = "feat(auth): add PKCE challenge verification [DEBT-101]"
+    assert parse_jira_keys_from_commit(msg1) == ["DEBT-101"]
+
+    msg2 = "fix(pay): resolve concurrency deadlock PAY-42 and CORE-88"
+    assert parse_jira_keys_from_commit(msg2) == ["PAY-42", "CORE-88"]
+
+    msg3 = "chore: bump dependencies"
+    assert parse_jira_keys_from_commit(msg3) == []
+
+
+def test_derive_jira_business_signals_empty():
+    """Empty issue list returns safe defaults."""
+    signals = derive_jira_business_signals([])
+    assert signals["customer_impact"] == 50.0
+    assert signals["sprint_urgency"] == 25.0
+    assert signals["provenance"] == "DEFAULT"
+    assert signals["open_bugs_count"] == 0
+
+
+def test_derive_jira_business_signals_critical_bug():
+    """Active sprint bug with highest severity produces high urgency and customer impact."""
+    issues = [
+        {
+            "key": "PAY-42",
+            "issue_type": "Bug",
+            "priority": "Highest",
+            "status": "In Progress",
+            "is_bug": True,
+            "sprint_state": "ACTIVE",
+            "fix_version": "v2.3.9",
+            "fix_version_date": datetime.now(timezone.utc) + timedelta(days=5),
+        }
+    ]
+    signals = derive_jira_business_signals(issues)
+    assert signals["customer_impact"] >= 95.0
+    assert signals["sprint_urgency"] == 90.0
+    assert signals["release_proximity"] == 95.0
+    assert signals["provenance"] == "INTEGRATION"
+    assert signals["has_active_sprint"] is True
+
+
+def test_derive_jira_business_signals_future_task():
+    """Future sprint task yields lower urgency and medium customer impact."""
+    issues = [
+        {
+            "key": "CORE-88",
+            "issue_type": "Task",
+            "priority": "Medium",
+            "status": "Open",
+            "is_bug": False,
+            "sprint_state": "FUTURE",
+            "fix_version": "v2.5.0",
+        }
+    ]
+    signals = derive_jira_business_signals(issues)
+    assert signals["customer_impact"] < 60.0
+    assert signals["sprint_urgency"] == 55.0
+    assert signals["provenance"] == "INTEGRATION"
+    assert signals["has_active_sprint"] is False
+
+
+def test_create_jira_issue_sandbox():
+    """Tests creating a single refactoring ticket."""
+    data = {
+        "component_name": "backend/services/payment.py",
+        "priority_score": 88.5,
+        "remediation_effort_hours": 16.0,
+        "technical_risk": 90.0,
+        "business_impact": 85.0,
+        "roi_quadrant": "Strategic Refactor",
+        "summary": "Refactor Payment Router",
+        "issue_type": "Task"
+    }
+    res = asyncio.run(create_jira_issue(data))
+    assert res["status"] == "success"
+    assert "issue_key" in res
+    assert "issue_url" in res
+    assert res["priority"] == "Highest"
+    assert res["story_points"] == 3
+
+
+def test_bulk_export_to_jira_sandbox():
+    """Tests bulk exporting components to a sprint backlog."""
+    components = [
+        {"component_name": "file_a.py", "priority_score": 92.0, "remediation_effort_hours": 8.0},
+        {"component_name": "file_b.py", "priority_score": 65.0, "remediation_effort_hours": 4.0},
+    ]
+    res = asyncio.run(bulk_export_to_jira(components, sprint_name="Sprint 25"))
+    assert res["status"] == "success"
+    assert res["total_tickets_created"] == 2
+    assert res["total_story_points"] == 3  # 2 + 1
+
+
+def test_sync_mined_jira_links(db_session, jira_provider):
+    """Tests syncing mined commit links updates BusinessContext and priority scores."""
+    ws = Workspace(id="ws_jira_test", name="Jira Workspace", slug="jira-test")
+    db_session.add(ws)
+    repo = Repository(workspace_id="ws_jira_test", name="jira-repo")
+    db_session.add(repo)
+    db_session.commit()
+
+    f = SourceFile(
+        workspace_id="ws_jira_test",
+        repository_id=repo.id,
+        file_path="src/billing.py",
+        file_name="billing.py",
+        language="Python",
+    )
+    db_session.add(f)
+    db_session.commit()
+
+    bctx = BusinessContext(
+        workspace_id="ws_jira_test",
+        file_id=f.id,
+        business_criticality=50.0,
+        customer_impact=50.0,
+        sprint_urgency=20.0,
+        release_proximity=40.0,
+        provenance="DEFAULT",
+    )
+    metric = EngineeringMetric(
+        workspace_id="ws_jira_test",
+        file_id=f.id,
+        cyclomatic_complexity=15.0,
+        test_coverage_pct=60.0,
+        technical_risk_score=75.0,
+    )
+    pred = MLPrediction(
+        workspace_id="ws_jira_test",
+        file_id=f.id,
+        predicted_future_risk=70.0,
+        defect_probability=0.55,
+    )
+    db_session.add_all([bctx, metric, pred])
+    db_session.commit()
+
+    mined_commits = [
+        {
+            "commit_hash": "c101",
+            "jira_keys": ["DEBT-101"],
+            "files": ["src/billing.py"],
+        }
+    ]
+
+    res = asyncio.run(jira_provider.sync_mined_jira_links(
+        db=db_session,
+        workspace_id="ws_jira_test",
+        repo_id=repo.id,
+        commit_links=mined_commits,
+    ))
+    assert res["status"] == "success"
+    assert res["linked_records_created"] >= 1
+    assert res["files_with_jira_signals"] == 1
+
+    # Verify BusinessContext updated
+    db_session.refresh(bctx)
+    assert bctx.provenance == "INTEGRATION"
+    assert bctx.sprint_urgency == 90.0
+    assert bctx.customer_impact >= 95.0
+
+
+def test_copilot_jira_tools(db_session):
+    """Tests create_jira_issue and search_jira_issues inside CopilotToolRegistry."""
+    ws = Workspace(id="ws_copilot_jira", name="Copilot Jira WS", slug="copilot-jira")
+    db_session.add(ws)
+    repo = Repository(workspace_id="ws_copilot_jira", name="copilot-repo")
+    db_session.add(repo)
+    db_session.commit()
+
+    f = SourceFile(
+        workspace_id="ws_copilot_jira",
+        repository_id=repo.id,
+        file_path="src/gateway.py",
+        file_name="gateway.py",
+        language="Python",
+    )
+    db_session.add(f)
+    db_session.commit()
+
+    registry = CopilotToolRegistry(db=db_session, workspace_id="ws_copilot_jira", repository_id=repo.id)
+
+    # 1. Create Jira issue via Copilot tool
+    create_res = registry.create_jira_issue(
+        file_path_or_id="src/gateway.py",
+        summary="Refactor gateway timeout handler",
+        issue_type="Task"
+    )
+    assert "issue_key" in create_res
+    assert create_res["status"] == "success"
+
+    # 2. Search Jira issues via Copilot tool
+    search_res = registry.search_jira_issues(file_path_or_id="src/gateway.py")
+    assert search_res["total_count"] >= 1
+    assert search_res["issues"][0]["issue_key"] == create_res["issue_key"]

@@ -11,6 +11,99 @@ import httpx
 from backend.config import settings
 
 
+SANDBOX_NOTION_SERVICES = [
+    {
+        "service_name": "Payment Gateway & Billing",
+        "pattern": "*payment*/**",
+        "tier": "Tier 1 — Mission Critical",
+        "business_criticality": 98.0,
+        "customer_impact": 95.0,
+        "module_criticality": 95.0,
+        "domain_tag": "payment",
+    },
+    {
+        "service_name": "User Identity & Session Security",
+        "pattern": "*auth*/**",
+        "tier": "Tier 1 — Mission Critical",
+        "business_criticality": 95.0,
+        "customer_impact": 92.0,
+        "module_criticality": 90.0,
+        "domain_tag": "auth",
+    },
+    {
+        "service_name": "Core Data Pipeline & Processing",
+        "pattern": "*pipeline*/**",
+        "tier": "Tier 2 — High Priority",
+        "business_criticality": 85.0,
+        "customer_impact": 80.0,
+        "module_criticality": 82.0,
+        "domain_tag": "pipeline",
+    },
+]
+
+
+async def ingest_service_criticality_from_notion(database_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Ingests Service Criticality Tier definitions from a Notion database.
+    Supports live Notion API v1 database queries and realistic sandbox fallback.
+    Returns parsed business rules ready to be applied by BusinessRulesEngine.
+    """
+    db_id = database_id or settings.NOTION_DATABASE_ID or "notion_db_adr_architecture"
+
+    if settings.NOTION_API_KEY:
+        headers = {
+            "Authorization": f"Bearer {settings.NOTION_API_KEY}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(f"https://api.notion.com/v1/databases/{db_id}/query", json={}, headers=headers)
+                if res.status_code == 200:
+                    results = res.json().get("results", [])
+                    extracted_rules = []
+                    for page in results:
+                        props = page.get("properties", {})
+                        # Extract service title / path pattern
+                        title_prop = props.get("Service Name", {}).get("title", [])
+                        service_name = title_prop[0].get("plain_text", "Service") if title_prop else "Service"
+                        pattern_prop = props.get("Path Pattern", {}).get("rich_text", [])
+                        pattern = pattern_prop[0].get("plain_text", f"*{service_name.lower()}*/**") if pattern_prop else f"*{service_name.lower()}*/**"
+                        tier_prop = props.get("Tier", {}).get("select", {})
+                        tier_name = tier_prop.get("name", "Tier 2") if tier_prop else "Tier 2"
+
+                        crit = 95.0 if "1" in tier_name else (80.0 if "2" in tier_name else 50.0)
+                        extracted_rules.append({
+                            "service_name": service_name,
+                            "pattern": pattern,
+                            "tier": tier_name,
+                            "business_criticality": crit,
+                            "customer_impact": crit * 0.95,
+                            "module_criticality": crit * 0.90,
+                            "domain_tag": service_name.lower().replace(" ", "_"),
+                        })
+                    if extracted_rules:
+                        return {
+                            "status": "success",
+                            "mode": "live",
+                            "database_id": db_id,
+                            "rules_count": len(extracted_rules),
+                            "rules": extracted_rules,
+                        }
+        except Exception:
+            pass
+
+    # Sandbox / Mock Mode
+    return {
+        "status": "success",
+        "mode": "sandbox_mock",
+        "database_id": db_id,
+        "rules_count": len(SANDBOX_NOTION_SERVICES),
+        "rules": SANDBOX_NOTION_SERVICES,
+    }
+
+
 def get_notion_status() -> Dict[str, Any]:
     """Returns the connection status and configuration summary for Notion."""
     is_live = bool(settings.NOTION_API_KEY)
@@ -110,18 +203,22 @@ async def sync_backlog_to_notion(components: List[Dict[str, Any]], database_id: 
     }
 
 
-async def create_notion_audit_report(summary_data: Dict[str, Any]) -> Dict[str, Any]:
+async def create_notion_audit_report(summary_data: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
     """
     Creates an executive Tech Debt Audit Report & Architecture Decision Record (ADR) in Notion.
     """
-    report_title = summary_data.get("title", f"Technical Debt Executive Audit — Q3 2026")
-    total_components = summary_data.get("total_components", 100)
-    avg_priority = summary_data.get("avg_priority_score", 64.2)
-    quick_wins = summary_data.get("quick_wins_count", 24)
-    hotspots = summary_data.get("critical_hotspots_count", 12)
+    data = dict(summary_data or {})
+    data.update(kwargs)
+
+    report_title = data.get("title", f"Technical Debt Executive Audit — Q3 2026")
+    total_components = data.get("total_components", 100)
+    avg_priority = data.get("avg_priority_score", 64.2)
+    quick_wins = data.get("quick_wins_count", 24)
+    hotspots = data.get("critical_hotspots_count", 12)
 
     report_id = f"adr_{int(time.time())}"
     notion_url = f"https://www.notion.so/workspace/audit-report-{report_id}"
+
 
     return {
         "status": "success",

@@ -26,12 +26,16 @@ from backend.database.models import (
     TechnicalDebtItem,
     BusinessContext,
     MLPrediction,
+    JiraIssueLink,
 )
 from backend.services.git_cloner import SandboxedGitCloner
 from backend.services.code_analyzer import scan_repository_tree
 from backend.services.git_miner import GitMiner
+from backend.services.jira_service import derive_jira_business_signals
+from backend.integrations.jira_provider import JiraProvider
 from backend.services.priority_service import PriorityService
 from backend.services.recommendation_service import RecommendationService
+
 
 logger = logging.getLogger(__name__)
 
@@ -161,22 +165,56 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 )
                 db.add(metric_obj)
 
-                # Save Business Context (defaults or domain-based)
+                # Save Business Context (integrated with Jira or defaults/rules)
                 is_core = any(p in rel_path.lower() for p in ("auth", "pay", "core", "api", "order"))
+                jira_keys = hist.get("jira_keys", [])
+
+                if jira_keys:
+                    jira_prov = JiraProvider()
+                    jira_issues = [jira_prov.fetch_or_simulate_issue(k) for k in jira_keys]
+                    b_signals = derive_jira_business_signals(jira_issues)
+                    cust_impact = b_signals["customer_impact"]
+                    sprint_urg = b_signals["sprint_urgency"]
+                    rel_prox = b_signals["release_proximity"]
+                    biz_crit = 90.0 if is_core else 65.0
+                    bctx_provenance = "INTEGRATION"
+
+                    for iss in jira_issues:
+                        db.add(JiraIssueLink(
+                            workspace_id=workspace_id,
+                            file_id=file_obj.id,
+                            issue_key=iss.get("key", "UNKNOWN"),
+                            summary=iss.get("summary"),
+                            issue_type=iss.get("issue_type", "Task"),
+                            priority=iss.get("priority", "Medium"),
+                            status=iss.get("status", "Open"),
+                            is_bug=iss.get("is_bug", False),
+                            sprint_state=iss.get("sprint_state"),
+                            fix_version=iss.get("fix_version"),
+                            created_at=utc_now()
+                        ))
+                else:
+                    cust_impact = 85.0 if is_core else 50.0
+                    sprint_urg = 70.0
+                    rel_prox = 75.0
+                    biz_crit = 90.0 if is_core else 60.0
+                    bctx_provenance = "USER_RULE" if is_core else "DEFAULT"
+
                 bctx_obj = BusinessContext(
                     workspace_id=workspace_id,
                     file_id=file_obj.id,
-                    business_criticality=90.0 if is_core else 60.0,
-                    customer_impact=85.0 if is_core else 50.0,
+                    business_criticality=biz_crit,
+                    customer_impact=cust_impact,
                     module_criticality=85.0 if is_core else 55.0,
-                    release_proximity=75.0,
-                    sprint_urgency=70.0,
+                    release_proximity=rel_prox,
+                    sprint_urgency=sprint_urg,
                     maintenance_cost=min(100.0, float(churn_commits * 4)),
                     estimated_remediation_effort=min(90.0, max(15.0, float(complexity * 2.5))),
                     domain_tag="core" if is_core else "utility",
-                    provenance="USER_RULE" if is_core else "DEFAULT",
+                    provenance=bctx_provenance,
                 )
                 db.add(bctx_obj)
+
 
                 # Save ML Prediction (Defect probability calibrated from churn & complexity)
                 pred_risk = min(99.0, max(10.0, tr_score * 0.95))

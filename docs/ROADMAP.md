@@ -8,32 +8,36 @@ This roadmap defines the iterative transformation of DebtScope from a static, se
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ P0: Audit, Findings & Architectural Alignment (Current)                                          │
+│ P0: Audit, Findings & Architectural Alignment [COMPLETED]                                        │
 │     Investigate discrepancies, data leakage, missing inputs, and author roadmap/decisions docs.   │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P1: Core Foundation & Multi-Tenancy                                                              │
+│ P1: Core Foundation & Multi-Tenancy [COMPLETED]                                                  │
 │     Postgres + Alembic, Users/Workspaces/Memberships, Google OAuth + HTTP-only cookies,          │
 │     Tenant-scoping queries, Demo Workspace isolation.                                             │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P2: Real Repository Ingestion & Mining Worker                                                    │
+│ P2: Real Repository Ingestion & Mining Worker [COMPLETED]                                        │
 │     Background DB-backed jobs, GitHub App & clone worker, Git history mining, multi-language     │
 │     lizard AST analysis, provenance tagging, dynamic confidence scoring.                         │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P3: Real-Data Scoring & Single Source of Truth                                                   │
+│ P3: Real-Data Scoring & Single Source of Truth [COMPLETED]                                       │
 │     ML integration with real SZZ defect predictor, Business Rules engine, formula single         │
 │     source of truth, elimination of frontend silent fallbacks, honest confidence UI.            │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P4: Atlassian Jira Integration (3LO)                                                             │
+│ P3.5: Grounded AI Copilot & AST Refactoring Verification [COMPLETED]                             │
+│     Provider-agnostic LLM adapter, SSE streaming, tenant tool suite, AST-verified diffs,         │
+│     42-scenario golden evaluation benchmark with 100% pass rate.                                 │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ P4: Atlassian Jira Integration (3LO) [COMPLETED]                                                 │
 │     OAuth 2.0 3LO token lifecycle, issue-to-commit linking, Jira-derived customer impact and      │
-│     urgency, two-way ticket write-back for priority items.                                       │
+│     urgency, two-way ticket write-back for priority items, Copilot Jira tools.                   │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P5: Notion Integration & Executive Reporting                                                     │
+│ P5: Notion Integration & Executive Reporting [COMPLETED]                                         │
 │     OAuth 2.0 integration, "Service Criticality" database ingestion, bi-directional export of    │
-│     refactoring reports and sprint debt matrices.                                                │
+│     refactoring reports and sprint debt matrices, Copilot Notion tools.                          │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ P6: Production Hardening, Verification & Deployment                                              │
-│     Docker Compose orchestration, CI pipelines, security audits, verification on 3 real-world    │
-│     repositories (pallets/flask, frontend React/TS repo, private repo), updated docs.             │
+│ P6: Production Hardening, Verification & Deployment [COMPLETED]                                  │
+│     Docker Compose orchestration, CI pipelines, security audits, complete test suite (122 pass),│
+│     frontend production bundle build (Vite + Nginx), updated docs.                               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 

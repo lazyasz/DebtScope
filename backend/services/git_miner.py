@@ -9,16 +9,18 @@ Mines local cloned git repositories for:
 """
 
 import os
+import re
 import math
 import subprocess
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
 logger = logging.getLogger(__name__)
 
 # Patterns matching bug-fixing commits (SZZ heuristic foundation)
 BUG_FIX_KEYWORDS = ("fix", "bug", "patch", "issue", "resolve", "defect", "error", "crash")
+JIRA_KEY_REGEX = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
 
 
 class GitMiner:
@@ -83,9 +85,11 @@ class GitMiner:
         file_stats: Dict[str, Dict[str, Any]] = {}
         now_ts = int(datetime.now(timezone.utc).timestamp())
 
+        current_commit_hash = ""
         current_author = "Unknown"
         current_ts = now_ts
         current_is_fix = False
+        current_jira_keys: List[str] = []
 
         for line in log_raw.splitlines():
             line = line.strip()
@@ -95,13 +99,16 @@ class GitMiner:
             if line.startswith("COMMIT_SEP|"):
                 parts = line.split("|")
                 if len(parts) >= 5:
+                    current_commit_hash = parts[1].strip()
                     current_author = parts[2].strip() or "Unknown"
                     try:
                         current_ts = int(parts[3].strip())
                     except ValueError:
                         current_ts = now_ts
-                    subject = parts[4].lower()
-                    current_is_fix = any(k in subject for k in BUG_FIX_KEYWORDS)
+                    raw_subject = parts[4].strip()
+                    subject_lower = raw_subject.lower()
+                    current_is_fix = any(k in subject_lower for k in BUG_FIX_KEYWORDS)
+                    current_jira_keys = JIRA_KEY_REGEX.findall(raw_subject)
                 continue
 
             # Numstat line: <added> \t <removed> \t <filepath>
@@ -120,6 +127,7 @@ class GitMiner:
                         "commit_count": 0,
                         "authors": {},
                         "bug_fixes_count": 0,
+                        "jira_keys": set(),
                         "first_commit_ts": current_ts,
                         "last_commit_ts": current_ts,
                     }
@@ -131,6 +139,8 @@ class GitMiner:
                 entry["authors"][current_author] = entry["authors"].get(current_author, 0) + 1
                 if current_is_fix:
                     entry["bug_fixes_count"] += 1
+                if current_jira_keys:
+                    entry["jira_keys"].update(current_jira_keys)
 
                 # Track temporal boundaries
                 if current_ts < entry["first_commit_ts"]:
@@ -176,6 +186,7 @@ class GitMiner:
                 "author_entropy": round(entropy, 2),
                 "bus_factor_risk": bus_factor_risk,
                 "bug_fixes_count": data["bug_fixes_count"],
+                "jira_keys": sorted(list(data["jira_keys"])),
                 "first_commit_date": first_dt,
                 "last_commit_date": last_dt,
                 "age_days": age_days,
@@ -184,3 +195,73 @@ class GitMiner:
             }
 
         return final_results
+
+    def mine_jira_commit_links(self) -> List[Dict[str, Any]]:
+        """
+        Parses commit history to extract Jira issue keys and mapped files.
+        Returns a list of dicts:
+        [
+            {
+                "commit_hash": str,
+                "author": str,
+                "timestamp": datetime,
+                "subject": str,
+                "jira_keys": List[str],
+                "files": List[str]
+            }
+        ]
+        """
+        log_raw = self._run_git([
+            "log",
+            "--name-only",
+            "--pretty=format:COMMIT_SEP|%H|%an|%at|%s",
+        ])
+
+        if not log_raw.strip():
+            return []
+
+        commits: List[Dict[str, Any]] = []
+        current_commit: Optional[Dict[str, Any]] = None
+
+        for line in log_raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            if line.startswith("COMMIT_SEP|"):
+                if current_commit and current_commit["jira_keys"]:
+                    commits.append(current_commit)
+
+                parts = line.split("|")
+                if len(parts) >= 5:
+                    c_hash = parts[1].strip()
+                    author = parts[2].strip()
+                    try:
+                        ts = int(parts[3].strip())
+                    except ValueError:
+                        ts = 0
+                    subject = parts[4].strip()
+                    jira_keys = JIRA_KEY_REGEX.findall(subject)
+
+                    current_commit = {
+                        "commit_hash": c_hash,
+                        "author": author,
+                        "timestamp": datetime.fromtimestamp(ts, timezone.utc) if ts else None,
+                        "subject": subject,
+                        "jira_keys": jira_keys,
+                        "files": []
+                    }
+                else:
+                    current_commit = None
+                continue
+
+            if current_commit is not None:
+                norm_p = line.replace("\\", "/").strip()
+                if norm_p and norm_p not in current_commit["files"]:
+                    current_commit["files"].append(norm_p)
+
+        if current_commit and current_commit["jira_keys"]:
+            commits.append(current_commit)
+
+        return commits
+

@@ -6,13 +6,126 @@ Supports live Atlassian REST API v3 (including /rest/api/3/issue/bulk) and inter
 """
 
 import time
+import re
 import base64
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import httpx
+from sqlalchemy.orm import Session
+
 from backend.config import settings
+
+JIRA_KEY_REGEX = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
+
+
+def parse_jira_keys_from_commit(message: str) -> List[str]:
+    """Extracts Jira issue keys like 'DEBT-101', 'PAY-42' from commit text."""
+    if not message:
+        return []
+    return JIRA_KEY_REGEX.findall(message)
+
+
+def derive_jira_business_signals(issues: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Derives 5D formula business dimensions from associated Jira issues:
+    - Customer Impact: based on open defect counts and maximum severity
+    - Sprint Urgency: active sprint (90) vs planned sprint (55) vs backlog (25)
+    - Release Proximity: calculated from target fixVersion release proximity
+    """
+    if not issues:
+        return {
+            "customer_impact": 50.0,
+            "sprint_urgency": 25.0,
+            "release_proximity": 50.0,
+            "open_bugs_count": 0,
+            "linked_issues_count": 0,
+            "has_active_sprint": False,
+            "provenance": "DEFAULT"
+        }
+
+    severity_weights = {
+        "highest": 95.0,
+        "high": 80.0,
+        "medium": 60.0,
+        "low": 40.0,
+        "lowest": 20.0
+    }
+
+    open_bugs = 0
+    max_severity_score = 40.0
+    in_active_sprint = False
+    in_future_sprint = False
+    has_fix_version = False
+    target_proximity = 50.0
+
+    now_utc = datetime.now(timezone.utc)
+
+    for iss in issues:
+        status = str(iss.get("status", "Open")).lower()
+        is_closed = status in ("done", "closed", "resolved")
+        issue_type = str(iss.get("issue_type", "Task")).lower()
+        is_bug = iss.get("is_bug") or "bug" in issue_type or "defect" in issue_type
+
+        priority = str(iss.get("priority", "Medium")).lower()
+        score = severity_weights.get(priority, 50.0)
+
+        if not is_closed:
+            if is_bug:
+                open_bugs += 1
+                max_severity_score = max(max_severity_score, score)
+            else:
+                max_severity_score = max(max_severity_score, score * 0.85)
+
+        s_state = str(iss.get("sprint_state", "")).upper()
+        if s_state == "ACTIVE":
+            in_active_sprint = True
+        elif s_state == "FUTURE":
+            in_future_sprint = True
+
+        if iss.get("fix_version"):
+            has_fix_version = True
+            fv_date = iss.get("fix_version_date")
+            if isinstance(fv_date, datetime):
+                # Calculate days to release
+                days = (fv_date - now_utc).days
+                if days <= 7:
+                    target_proximity = max(target_proximity, 95.0)
+                elif days <= 14:
+                    target_proximity = max(target_proximity, 85.0)
+                elif days <= 30:
+                    target_proximity = max(target_proximity, 70.0)
+                else:
+                    target_proximity = max(target_proximity, 50.0)
+            else:
+                target_proximity = max(target_proximity, 75.0)
+
+    # Customer impact formulation:
+    if open_bugs > 0:
+        customer_impact = min(100.0, max_severity_score + min(15.0, (open_bugs - 1) * 5.0))
+    else:
+        customer_impact = max_severity_score
+
+    # Sprint urgency formulation:
+    if in_active_sprint:
+        sprint_urgency = 90.0
+    elif in_future_sprint:
+        sprint_urgency = 55.0
+    else:
+        sprint_urgency = 25.0
+
+    return {
+        "customer_impact": round(customer_impact, 1),
+        "sprint_urgency": round(sprint_urgency, 1),
+        "release_proximity": round(target_proximity, 1),
+        "open_bugs_count": open_bugs,
+        "linked_issues_count": len(issues),
+        "has_active_sprint": in_active_sprint,
+        "provenance": "INTEGRATION"
+    }
 
 
 def _map_score_to_priority(priority_score: float) -> str:
+
     """Maps continuous 0-100 priority score to standard Jira priority strings."""
     if priority_score >= 80:
         return "Highest"

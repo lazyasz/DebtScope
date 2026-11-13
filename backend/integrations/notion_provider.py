@@ -13,7 +13,11 @@ from backend.integrations.base import IntegrationProvider
 from backend.integrations.normalizer import Normalizer, NormalizedDoc
 from backend.integrations.token_security import TokenSecurity
 from backend.database.models import IntegrationConnection
-from backend.services.notion_service import sync_backlog_to_notion, create_notion_audit_report
+from backend.services.notion_service import (
+    sync_backlog_to_notion,
+    create_notion_audit_report,
+    ingest_service_criticality_from_notion,
+)
 from backend.config import settings
 
 SANDBOX_NOTION_DATABASES = [
@@ -195,6 +199,10 @@ class NotionProvider(IntegrationProvider):
             "results": res.get("pages", []),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+    async def ingest_criticality(self, database_id: Optional[str] = None) -> Dict[str, Any]:
+        """Ingests service criticality tier rules from a connected Notion database."""
+        return await ingest_service_criticality_from_notion(database_id)
 
     async def disconnect(self, connection: Optional[IntegrationConnection], db: Session) -> bool:
         """Revokes token and disconnects Notion."""

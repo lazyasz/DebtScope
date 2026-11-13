@@ -1,6 +1,6 @@
 # DebtScope AI Copilot Evaluation Benchmark Report
 
-**Generated**: 2026-11-13 03:03:27  
+**Generated**: 2026-11-13 20:34:51  
 **Total Evaluation Scenarios**: 42  
 **Overall Benchmark Pass Rate**: **100.0%** (42/42)  
 

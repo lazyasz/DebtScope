@@ -13,13 +13,15 @@ import secrets
 from datetime import datetime
 
 from backend.database.connection import get_db
-from backend.database.models import IntegrationConnection
+from backend.database.models import IntegrationConnection, JiraIssueLink, NotionReport
 from backend.integrations.github_provider import GitHubProvider
 from backend.integrations.jira_provider import JiraProvider
 from backend.integrations.notion_provider import NotionProvider
 from backend.integrations.token_security import TokenSecurity
 from backend.services.auth_service import get_current_user
+from backend.services.business_rules_service import BusinessRulesEngine
 from backend.config import settings
+
 
 router = APIRouter(prefix="/integrations", tags=["Unified Integrations Hub"])
 
@@ -251,11 +253,100 @@ async def sync_to_notion_database(payload: NotionSyncRequest):
 
 
 @router.post("/notion/create-report", summary="Create Executive Audit Report in Notion")
-async def create_audit_report_in_notion(payload: NotionAuditReportRequest):
+async def create_audit_report_in_notion(payload: NotionAuditReportRequest, db: Session = Depends(get_db)):
     """Publishes a comprehensive Tech Debt Executive Audit Report to Notion."""
     from backend.services.notion_service import create_notion_audit_report
+    current_user = get_current_user()
+    workspace_id = current_user.get("workspace_id", "ws_demo")
+
     res = await create_notion_audit_report(payload.model_dump())
+
+    # Save NotionReport record
+    report = NotionReport(
+        workspace_id=workspace_id,
+        notion_page_id=res.get("report_id", "adr_mock"),
+        title=payload.title or "Executive Technical Debt Audit",
+        total_debt_hours=float(res.get("summary", {}).get("total_components", 100)) * 2.5,
+        top_debt_items_count=int(res.get("summary", {}).get("critical_hotspots", 12)),
+        report_url=res.get("notion_url"),
+        export_status="COMPLETED"
+    )
+    db.add(report)
+    db.commit()
+
     return res
+
+
+@router.get("/jira/issues", summary="Get Workspace Linked Jira Issues")
+def get_linked_jira_issues(
+    file_id: Optional[int] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Returns Jira issue links mapped to codebase files."""
+    current_user = get_current_user()
+    workspace_id = current_user.get("workspace_id", "ws_demo")
+
+    query = db.query(JiraIssueLink).filter(JiraIssueLink.workspace_id == workspace_id)
+    if file_id:
+        query = query.filter(JiraIssueLink.file_id == file_id)
+
+    issues = query.limit(limit).all()
+    return {
+        "status": "success",
+        "workspace_id": workspace_id,
+        "count": len(issues),
+        "issues": [
+            {
+                "id": i.id,
+                "issue_key": i.issue_key,
+                "summary": i.summary,
+                "issue_type": i.issue_type,
+                "priority": i.priority,
+                "status": i.status,
+                "is_bug": i.is_bug,
+                "sprint_state": i.sprint_state,
+                "fix_version": i.fix_version,
+                "file_id": i.file_id,
+                "commit_hash": i.commit_hash,
+            }
+            for i in issues
+        ]
+    }
+
+
+class IngestCriticalityRequest(BaseModel):
+    database_id: Optional[str] = None
+    repository_id: Optional[int] = None
+
+
+@router.post("/notion/ingest-criticality", summary="Ingest Service Criticality Rules from Notion")
+async def ingest_notion_criticality(
+    payload: IngestCriticalityRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ingests Service Criticality rules from Notion and automatically applies them
+    to matching repository source files via BusinessRulesEngine.
+    """
+    prov = PROVIDERS["notion"]
+    rules_data = await prov.ingest_criticality(payload.database_id)
+    rules = rules_data.get("rules", [])
+
+    updated_files = 0
+    if payload.repository_id and rules:
+        updated_files = BusinessRulesEngine.apply_rules_to_repository(
+            db, payload.repository_id, custom_rules=rules
+        )
+
+    return {
+        "status": "success",
+        "database_id": rules_data.get("database_id"),
+        "rules_ingested_count": len(rules),
+        "rules": rules,
+        "repository_files_updated": updated_files,
+    }
+
 
 
 @router.post("/config", summary="Update Live Integration Credentials")

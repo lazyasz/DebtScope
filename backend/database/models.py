@@ -326,3 +326,42 @@ class CopilotMessage(Base):
     conversation = relationship("CopilotConversation", back_populates="messages")
 
 
+class JiraIssueLink(Base):
+    __tablename__ = "jira_issue_links"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, default="ws_demo", index=True)
+    file_id = Column(Integer, ForeignKey("source_files.id", ondelete="CASCADE"), nullable=True, index=True)
+    commit_hash = Column(String(100), nullable=True)
+    issue_key = Column(String(50), nullable=False, index=True)  # e.g. "DEBT-101"
+    summary = Column(String(255), nullable=True)
+    issue_type = Column(String(50), default="Task")  # Bug, Task, Story
+    priority = Column(String(50), default="Medium")  # Highest, High, Medium, Low
+    status = Column(String(50), default="Open")  # Open, In Progress, Resolved, Closed
+    is_bug = Column(Boolean, default=False)
+    sprint_id = Column(String(100), nullable=True)
+    sprint_state = Column(String(50), nullable=True)  # ACTIVE, FUTURE, CLOSED
+    fix_version = Column(String(100), nullable=True)
+    fix_version_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    file = relationship("SourceFile", backref="jira_links")
+
+
+class NotionReport(Base):
+    __tablename__ = "notion_reports"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, default="ws_demo", index=True)
+    notion_page_id = Column(String(100), nullable=True)
+    title = Column(String(255), nullable=False)
+    report_type = Column(String(50), default="EXECUTIVE_SUMMARY")
+    total_debt_hours = Column(Float, default=0.0)
+    top_debt_items_count = Column(Integer, default=0)
+    export_status = Column(String(50), default="COMPLETED")  # COMPLETED, FAILED, PENDING
+    report_url = Column(String(500), nullable=True)
+    exported_at = Column(DateTime, default=utc_now)
+
+
+

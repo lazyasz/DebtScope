@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: debtscope-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-debtscope}
+      POSTGRES_USER: ${POSTGRES_USER:-debtscope_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-debtscope_secure_pass_2026}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-debtscope_admin} -d ${POSTGRES_DB:-debtscope}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - debtscope-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: debtscope-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-debtscope_admin}:${POSTGRES_PASSWORD:-debtscope_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-debtscope}
+      - SECRET_KEY=${SECRET_KEY:-8225d302375b6b0ca4f39d59f4d9f3a0b571a050792491192d186b4fcaf7013a}
+      - JWT_SECRET=${JWT_SECRET:-ab5823c6e3dc4749fdf60cecf0d6ff7107d9b86c962dc5871c065cc58f0ac59e}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-jO6sB1JjIbyQVKkooyUsJrou4tx38pF8al656WmYkDg=}
+      - DEV_SANDBOX_AUTH=${DEV_SANDBOX_AUTH:-True}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - JIRA_CLIENT_ID=${JIRA_CLIENT_ID:-}
+      - JIRA_CLIENT_SECRET=${JIRA_CLIENT_SECRET:-}
+      - NOTION_CLIENT_ID=${NOTION_CLIENT_ID:-}
+      - NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET:-}
+      - COPILOT_LLM_PROVIDER=${COPILOT_LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8000:8000"
+    networks:
+      - debtscope-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: debtscope-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+    networks:
+      - debtscope-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  debtscope-net:
+    driver: bridge

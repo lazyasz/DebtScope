@@ -9,7 +9,15 @@ import json
 from typing import Dict, Any, List, Optional, Union
 from sqlalchemy.orm import Session
 
-from backend.database.models import SourceFile, PriorityScore, EngineeringMetric, BusinessContext, TechnicalDebtItem
+from backend.database.models import (
+    SourceFile,
+    PriorityScore,
+    EngineeringMetric,
+    BusinessContext,
+    TechnicalDebtItem,
+    JiraIssueLink,
+    NotionReport,
+)
 from backend.services.priority_service import PriorityService
 from backend.services.ast_verifier import ASTVerifier
 from backend.config import settings
@@ -96,6 +104,40 @@ COPILOT_TOOL_SCHEMAS = [
                 "refactoring_goal": {"type": "string", "description": "Refactoring goal (e.g., 'decompose god class', 'extract helper functions', 'reduce cyclomatic complexity')"},
             },
             "required": ["file_path_or_id"],
+        },
+    },
+    {
+        "name": "create_jira_issue",
+        "description": "Creates a Jira refactoring ticket for a prioritized technical debt component.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path_or_id": {"type": "string", "description": "Target file to create ticket for"},
+                "summary": {"type": "string", "description": "Optional custom summary/title for the ticket"},
+                "issue_type": {"type": "string", "enum": ["Task", "Bug", "Story"], "description": "Issue type (default: Task)"},
+            },
+            "required": ["file_path_or_id"],
+        },
+    },
+    {
+        "name": "search_jira_issues",
+        "description": "Searches for Jira issues linked to the repository or to a specific file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path_or_id": {"type": "string", "description": "Optional file path to filter issues"},
+                "status": {"type": "string", "description": "Optional status filter (e.g. Open, In Progress)"},
+            },
+        },
+    },
+    {
+        "name": "export_notion_report",
+        "description": "Exports an executive technical debt report and sprint ROI matrix into the connected Notion workspace.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Optional custom report title"},
+            },
         },
     },
 ]
@@ -442,6 +484,97 @@ class CopilotToolRegistry:
             "refactoring_goal": refactoring_goal,
             "verification": verification,
         }
+
+    def create_jira_issue(self, file_path_or_id: Union[str, int], summary: Optional[str] = None, issue_type: str = "Task") -> Dict[str, Any]:
+        """Creates a Jira refactoring ticket for a file within tenant boundaries."""
+        file_obj = self._resolve_file(file_path_or_id)
+        if not file_obj:
+            return {"error": f"File '{file_path_or_id}' not found in current workspace."}
+
+        ps = file_obj.priority_score
+        bctx = file_obj.business_context
+        pred = file_obj.prediction
+
+        payload = {
+            "component_name": file_obj.file_path,
+            "priority_score": ps.final_priority_score if ps else 75.0,
+            "remediation_effort_hours": bctx.estimated_remediation_effort if bctx else 12.0,
+            "defect_probability": pred.defect_probability if pred else 0.45,
+            "technical_risk": ps.composite_technical_risk if ps else 70.0,
+            "business_impact": ps.composite_business_impact if ps else 65.0,
+            "roi_quadrant": ps.quadrant if ps else "Strategic Refactoring",
+            "summary": summary or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}",
+            "issue_type": issue_type,
+        }
+
+        import asyncio
+        from backend.services.jira_service import create_jira_issue
+        res = asyncio.run(create_jira_issue(payload))
+
+        # Save JiraIssueLink record
+        link = JiraIssueLink(
+            workspace_id=self.workspace_id,
+            file_id=file_obj.id,
+            issue_key=res.get("issue_key", "DEBT-MOCK"),
+            summary=res.get("summary"),
+            issue_type=issue_type,
+            priority=res.get("priority", "High"),
+            status="Open",
+            sprint_state="ACTIVE",
+        )
+        self.db.add(link)
+        self.db.commit()
+
+        return res
+
+    def search_jira_issues(self, file_path_or_id: Optional[Union[str, int]] = None, status: Optional[str] = None) -> Dict[str, Any]:
+        """Searches linked Jira issues."""
+        query = self.db.query(JiraIssueLink).filter(JiraIssueLink.workspace_id == self.workspace_id)
+        if file_path_or_id:
+            f = self._resolve_file(file_path_or_id)
+            if f:
+                query = query.filter(JiraIssueLink.file_id == f.id)
+            else:
+                return {"issues": [], "total_count": 0, "message": f"File '{file_path_or_id}' not found"}
+        if status:
+            query = query.filter(JiraIssueLink.status.ilike(f"%{status}%"))
+
+        links = query.limit(20).all()
+        return {
+            "issues": [
+                {
+                    "issue_key": l.issue_key,
+                    "summary": l.summary,
+                    "issue_type": l.issue_type,
+                    "priority": l.priority,
+                    "status": l.status,
+                    "is_bug": l.is_bug,
+                    "sprint_state": l.sprint_state,
+                    "file_id": l.file_id,
+                }
+                for l in links
+            ],
+            "total_count": len(links),
+        }
+
+    def export_notion_report(self, title: Optional[str] = None) -> Dict[str, Any]:
+        """Exports technical debt audit report to Notion."""
+        import asyncio
+        from backend.services.notion_service import create_notion_audit_report
+        res = asyncio.run(create_notion_audit_report(title=title))
+
+        report = NotionReport(
+            workspace_id=self.workspace_id,
+            notion_page_id=res.get("page_id", "notion_page_mock"),
+            title=title or "Executive Technical Debt & ROI Audit",
+            total_debt_hours=float(res.get("total_debt_hours", 42.0)),
+            top_debt_items_count=int(res.get("top_items_count", 5)),
+            report_url=res.get("page_url", "https://notion.so/debtscope/audit"),
+            export_status="COMPLETED",
+        )
+        self.db.add(report)
+        self.db.commit()
+        return res
 
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatches tool call safely."""

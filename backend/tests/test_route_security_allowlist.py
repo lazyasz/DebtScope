@@ -205,3 +205,17 @@ class TestRouteSecurityAndWorkspaceEnforcement:
         dep_names = set(d.call.__name__ for d in r.dependant.dependencies if hasattr(d.call, "__name__"))
         assert "get_current_workspace" not in dep_names
         assert r.path not in EXPLICIT_PUBLIC_ALLOWLIST
+
+    def test_allowlist_contains_no_wildcards_and_requires_exact_path_matches(self):
+        """
+        WS1 Item 9: Enforces that EXPLICIT_PUBLIC_ALLOWLIST contains ZERO wildcard prefixes
+        or regex wildcards (e.g. no '/api/v1/auth/*' or '.*'). Every route must be an exact
+        canonical path or standard FastAPI parameterized path template.
+        """
+        for route_path in EXPLICIT_PUBLIC_ALLOWLIST.keys():
+            assert not route_path.endswith("*"), (
+                f"Wildcard suffix forbidden in allowlist entry: {route_path}. Must declare exact canonical path."
+            )
+            assert ".*" not in route_path, (
+                f"Regex wildcard forbidden in allowlist entry: {route_path}."
+            )

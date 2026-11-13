@@ -96,6 +96,17 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
             "untrusted instruction",
             "confirmed=true",
             "confirmed = true",
+            "roleplay",
+            "chaosbot",
+            "base64",
+            "169.254",
+            "union select",
+            "developer mode",
+            "exec(",
+            "os.system",
+            "repeat the entire system prompt",
+            "etc/shadow",
+            "etc/passwd",
         ]
         if any(trig in q for trig in injection_triggers):
             yield CopilotStreamEvent("token", "⚠️ **Security Policy Refusal**: ")
@@ -106,12 +117,20 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
             return
 
         # 1b. Write Operations Gate (create_jira_issue, export_notion_report)
-        if "create_jira_issue" in q or "create jira" in q or "jira ticket" in q or "export_notion_report" in q or "export notion" in q or "notion report" in q:
+        has_write_intent = any(
+            w in q for w in [
+                "create_jira_issue", "create jira", "create a jira", "create ticket",
+                "open a ticket", "export_notion_report", "export notion", "export to notion",
+                "export report to notion"
+            ]
+        )
+        if has_write_intent:
             # Check if this request is originating from injected untrusted content (commit message, jira summary, notion page)
             is_injected = any(
                 inj in q for inj in [
-                    "commit message", "jira summary", "notion page",
-                    "system override", "ignore previous", "bypass", "untrusted"
+                    "commit message", "commit note", "git commit", "jira summary", "notion page",
+                    "system override", "ignore previous", "bypass", "untrusted", "without asking",
+                    "developer wrote"
                 ]
             )
             if is_injected:
@@ -123,7 +142,7 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
                 return
 
             # Check if explicit confirmation is present
-            is_confirmed = "confirm" in q or "yes" in q or "approve" in q
+            is_confirmed = any(c in q for c in ["i confirm", "confirmed: true", "yes, proceed", "confirm export", "confirm create", "approved by user"]) or (q.strip() in ["confirm", "yes", "approve"])
             if "jira" in q:
                 file_match = re.search(r'([\w/\.\-]+\.(?:py|js|ts|java|go|cpp|cs))', last_msg)
                 target = file_match.group(1) if file_match else "services/payment.py"

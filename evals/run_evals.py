@@ -147,6 +147,9 @@ async def run_benchmark(eval_yaml_path: str = "evals/copilot_golden.yaml") -> Di
 **Total Evaluation Scenarios**: {total}  
 **Overall Benchmark Pass Rate**: **{overall_pass_rate}%** ({passed_total}/{total})  
 
+> [!NOTE] Benchmark Authorship & Evaluation Setup
+> This benchmark suite is **self-authored** specifically for the DebtScope platform architecture to comprehensively evaluate tenant isolation, prompt injection defense, tool dispatch, and grounded mathematical consistency across 6 domains. In this verification run, the scenarios were executed against the **Deterministic Grounded Adapter (`DeterministicMockCopilotAdapter`)**. Live LLM inference using Google Gemini (`gemini-1.5-pro` / `gemini-2.0-flash`) or Anthropic Claude requires active API credentials as documented in `docs/MANUAL_STEPS.md`.
+
 ---
 
 ## Executive Summary

@@ -23,6 +23,9 @@ BUG_FIX_KEYWORDS = ("fix", "bug", "patch", "issue", "resolve", "defect", "error"
 from backend.services.jira_service import parse_jira_keys_from_commit
 
 
+from backend.services.git_cloner import kill_process_tree
+
+
 class GitMiner:
     """Extracts verifiable commit history metrics from a local git repository."""
 
@@ -36,22 +39,27 @@ class GitMiner:
         return JiraProvider().is_live_configured() or getattr(settings, "JIRA_SIMULATION_MODE", False)
 
     def _run_git(self, args: List[str], timeout: int = 60) -> str:
-        """Executes a git command inside the target repo directory."""
+        """Executes a git command inside the target repo directory with process-tree cleanup on timeout."""
         cmd = ["git"] + args
+        proc = subprocess.Popen(
+            cmd,
+            cwd=self.repo_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         try:
-            res = subprocess.run(
-                cmd,
-                cwd=self.repo_dir,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-            if res.returncode != 0:
-                logger.debug("Git command %s returned code %d: %s", args, res.returncode, res.stderr)
+            stdout, stderr = proc.communicate(timeout=timeout)
+            if proc.returncode != 0:
+                logger.debug("Git command %s returned code %d: %s", args, proc.returncode, stderr)
                 return ""
-            return res.stdout
+            return stdout
+        except subprocess.TimeoutExpired:
+            kill_process_tree(proc)
+            logger.warning("Git command %s timed out after %ds; actively terminated process tree.", args, timeout)
+            return ""
         except Exception as e:
+            kill_process_tree(proc)
             logger.warning("Git execution failed for %s: %s", args, e)
             return ""
 

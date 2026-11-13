@@ -72,12 +72,18 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 st = st.replace(tzinfo=timezone.utc)
             limit = job.timeout_seconds or getattr(settings, "WORKER_JOB_TIMEOUT_SECONDS", 600)
             if (utc_now() - st).total_seconds() > limit:
-                job.status = "FAILED"
-                job.stage = "Analysis timed out."
-                job.error_message = f"Job exceeded execution timeout of {limit}s."
-                job.completed_at = utc_now()
-                db.commit()
-                logger.error("Job %s exceeded timeout of %ds", job.id, limit)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                target_job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+                if target_job:
+                    target_job.status = "FAILED"
+                    target_job.stage = "Analysis timed out."
+                    target_job.error_message = f"Job exceeded execution timeout of {limit}s."
+                    target_job.completed_at = utc_now()
+                    db.commit()
+                logger.error("Job %s exceeded timeout of %ds", job_id, limit)
                 return True
             return False
 
@@ -338,11 +344,16 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
 
     except Exception as e:
         logger.exception("Analysis pipeline failed for job %s: %s", job_id, e)
-        if job:
-            job.status = "FAILED"
-            job.stage = "Analysis failed."
-            job.error_message = str(e)
-            job.completed_at = utc_now()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        target_job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+        if target_job:
+            target_job.status = "FAILED"
+            target_job.stage = "Analysis failed."
+            target_job.error_message = str(e)
+            target_job.completed_at = utc_now()
             try:
                 db.commit()
             except Exception:

@@ -123,6 +123,24 @@ def get_dir_size_mb(path: str) -> float:
     return total_size / (1024 * 1024)
 
 
+def kill_process_tree(proc: subprocess.Popen) -> None:
+    """Actively terminates a process and all of its spawned child processes."""
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            # On Windows, taskkill /F /T kills the entire process tree cleanly
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
+        else:
+            proc.kill()
+    except Exception as e:
+        logger.debug("Failed to kill process tree for PID %s: %s", proc.pid, e)
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
 class SandboxedGitCloner:
     """
     Manages cloning a git repository into a sandboxed temporary directory
@@ -159,26 +177,29 @@ class SandboxedGitCloner:
             self.temp_dir,
         ]
 
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
         try:
             # Mask token in environment / execution logs
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=CLONE_TIMEOUT_SECONDS,
-                check=False,
-            )
-            if result.returncode != 0:
+            stdout, stderr = proc.communicate(timeout=CLONE_TIMEOUT_SECONDS)
+            if proc.returncode != 0:
                 # Sanitize error to avoid leaking tokens in logs or exceptions
-                stderr_clean = result.stderr.replace(self.auth_token or "___", "[REDACTED]") if self.auth_token else result.stderr
+                stderr_clean = stderr.replace(self.auth_token or "___", "[REDACTED]") if self.auth_token else stderr
                 raise RuntimeError(f"Git clone failed: {stderr_clean.strip()}")
 
         except subprocess.TimeoutExpired:
+            kill_process_tree(proc)
             self.cleanup()
             raise CloneTimeoutError(
                 f"Repository clone exceeded timeout of {CLONE_TIMEOUT_SECONDS}s."
             )
         except Exception:
+            kill_process_tree(proc)
             self.cleanup()
             raise
 

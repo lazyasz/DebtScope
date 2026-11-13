@@ -254,3 +254,54 @@ class TestAnalysisJobEndpoints:
         finally:
             settings.COOKIE_SECURE = orig_secure
             settings.ENVIRONMENT = orig_env
+
+    def test_worker_timeout_asserts_no_results_written(self, local_git_fixture_repo):
+        """
+        WS1 Item 8: Verifies that when a worker job times out or fails:
+        1. Job status transitions to FAILED.
+        2. Error message explicitly records the timeout.
+        3. No source files, metrics, predictions, or priority scores are written to the database.
+        """
+        from backend.services.analysis_worker import run_analysis_pipeline
+        from backend.database.models import SourceFile, EngineeringMetric, PriorityScore, MLPrediction
+        
+        db = SessionLocal()
+        ws_id = "ws_timeout_test"
+        try:
+            ws = Workspace(id=ws_id, name="Timeout Test WS", slug="timeout-test-ws")
+            db.merge(ws)
+            db.commit()
+
+            # Job configured with already-expired start timestamp
+            expired_time = datetime.now(timezone.utc) - timedelta(seconds=600)
+            job = AnalysisJob(
+                id="job_timeout_fail_test",
+                workspace_id=ws_id,
+                repo_url="https://github.com/timeout/repo",
+                status="QUEUED",
+                timeout_seconds=5,
+                started_at=expired_time,
+            )
+            db.merge(job)
+            db.commit()
+
+            # Execute worker pipeline
+            run_analysis_pipeline(job.id, auth_token=None)
+
+            # Refresh job and verify status
+            failed_job = db.query(AnalysisJob).filter(AnalysisJob.id == "job_timeout_fail_test").first()
+            assert failed_job.status == "FAILED"
+            assert "exceeded execution timeout" in failed_job.error_message
+
+            # Assert ZERO results written after job failure
+            files_count = db.query(SourceFile).filter(SourceFile.workspace_id == ws_id).count()
+            metrics_count = db.query(EngineeringMetric).filter(EngineeringMetric.workspace_id == ws_id).count()
+            predictions_count = db.query(MLPrediction).filter(MLPrediction.workspace_id == ws_id).count()
+            scores_count = db.query(PriorityScore).filter(PriorityScore.workspace_id == ws_id).count()
+
+            assert files_count == 0, f"Expected 0 files written, found {files_count}"
+            assert metrics_count == 0, f"Expected 0 metrics written, found {metrics_count}"
+            assert predictions_count == 0, f"Expected 0 predictions written, found {predictions_count}"
+            assert scores_count == 0, f"Expected 0 scores written, found {scores_count}"
+        finally:
+            db.close()

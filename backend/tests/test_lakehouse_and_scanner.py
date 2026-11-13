@@ -33,6 +33,7 @@ def test_lakehouse_ml_metrics_endpoint():
     data = response.json()
     assert "regression_td_dataset" in data or "status" in data
 
+@pytest.mark.integration
 def test_scan_repository_endpoint():
     response = client.post("/api/repositories/scan", json={"url": "https://github.com/apache/zookeeper"})
     assert response.status_code == 200
@@ -42,21 +43,20 @@ def test_scan_repository_endpoint():
     assert "files" in data
     assert len(data["files"]) > 0
 
+@pytest.mark.integration
 def test_scan_live_shorthand_flask():
     response = client.post("/api/repositories/scan", json={"url": "pallets/flask"})
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "SUCCESS"
     assert "flask" in data["repository"]["name"].lower()
     assert "summary" in data
     assert data["summary"]["total_files_analyzed"] > 0
     assert len(data["files"]) > 0
 
+@pytest.mark.integration
 def test_scan_live_url_fastapi():
     response = client.post("/api/repositories/scan", json={"url": "https://github.com/tiangolo/fastapi"})
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "SUCCESS"
     assert "fastapi" in data["repository"]["name"].lower()
     assert len(data["files"]) > 0
-

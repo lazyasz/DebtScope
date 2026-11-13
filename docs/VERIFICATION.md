@@ -1080,3 +1080,61 @@ RUNNING TEMPORAL BACKTEST: fastify/fastify (JavaScript)
 | **`fastify/fastify`** | JavaScript | 63 | 41.3% | **+0.6796** (0.0000) | **0.8976** | 0.8857 | 0.9106 | 0.5073 |
 
 Detailed analysis and limitations documented in [BACKTEST.md](file:///c:/Users/dhruv/.gemini/antigravity-ide/scratch/DebtScope/docs/BACKTEST.md).
+
+
+---
+
+## 23. Item 7: CI Modernization (Postgres 16, Local Test Fixtures, Docker Smoke & Gitleaks)
+
+### 23.1 CI Workflow Hardening (`.github/workflows/ci.yml`)
+The GitHub Actions workflow has been upgraded with end-to-end production verification:
+1. **PostgreSQL 16 Service**: Added a dedicated Postgres 16 container (`postgres:16`) with automated health checks (`pg_isready`).
+2. **Schema Migration Validation**: Executes `python -m alembic upgrade head` directly against the Postgres 16 service before tests run.
+3. **PostgreSQL Test Execution**: Pytest runs the full backend and ML engine regression suites against Postgres 16 with `psycopg2-binary`.
+4. **Local Worker Fixtures**: `backend/tests/test_worker_mining.py` was refactored to use a local standalone git fixture repo (`local_git_fixture_repo`). It performs full git init, source commits, bug-fix commits, AST complexity analysis, commit mining, and prioritization without any external network calls.
+5. **Opt-In Integration Marker**: Live-network tests requiring external network access to GitHub (`pallets/flask`, `tiangolo/fastapi`, `apache/zookeeper`) are explicitly tagged `@pytest.mark.integration` and excluded from default offline test runs via `pytest.ini`.
+6. **Docker Compose Build & Smoke Test**:
+   - Builds both `Dockerfile.backend` and `Dockerfile.frontend`.
+   - Starts the full stack (`docker compose up -d`).
+   - Polls `/health` on the backend and asserts HTTP 200/304 on frontend port 5173.
+   - Cleans up containers with `docker compose down -v`.
+7. **Gitleaks Automated Secret Scan**: Integrates `gitleaks/gitleaks-action@v2` across all commits with `.gitleaksignore` rule enforcement.
+
+### 23.2 Local Worker Test Verification with Fixture Repo
+```powershell
+py -m pytest backend/tests/test_worker_mining.py -v
+```
+Output:
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+configfile: pytest.ini
+collected 7 items / 1 deselected / 6 selected
+
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_scan_job_ssrf_rejection PASSED [ 16%]
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_scan_job_creates_queued_record PASSED [ 33%]
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_job_polling_tenant_isolation PASSED [ 50%]
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_list_workspace_jobs PASSED [ 66%]
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_recover_stale_jobs_on_restart PASSED [ 83%]
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_cookie_secure_samesite_behavior PASSED [100%]
+
+================= 6 passed, 1 deselected, 1 warning in 1.56s ==================
+```
+
+### 23.3 Opt-in Live Network Integration Test Verification
+```powershell
+py -m pytest backend/tests/test_worker_mining.py -m integration -v
+```
+Output:
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+configfile: pytest.ini
+collected 7 items / 6 deselected / 1 selected
+
+backend/tests/test_worker_mining.py::TestAnalysisJobEndpoints::test_scan_job_live_network_opt_in PASSED [100%]
+
+================= 1 passed, 6 deselected, 1 warning in 11.72s =================
+```

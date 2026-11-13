@@ -720,6 +720,89 @@ backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_effort_blend_is_se
 ================ 11 passed, 20 deselected, 1 warning in 0.24s =================
 ```
 
+---
+
+## 18. Amendment E: Full Test Suite Baseline & Test Integrity Verification
+
+### 18.1 Test Suite Count vs. Baseline
+- **Baseline at `v1.0-rc1`**: **122 passed**
+- **Current Total on `fix/quality-pass`**: **155 passed** (+33 tests, a 27% increase in coverage)
+- **Status**: 155 passed, 0 failed, 0 errors.
+
+### 18.2 Diff of Test Lines Changed / Removed Since `v1.0-rc1`
+Command run: `git diff v1.0-rc1 --stat -- backend/tests`
+```text
+ backend/tests/test_copilot_confirmation_gate.py | 366 ++++++++++++++++++++----
+ backend/tests/test_jira_provider.py             |  74 ++++-
+ backend/tests/test_multi_tenancy.py             | 101 ++++++-
+ backend/tests/test_notion_provider.py           |  26 +-
+ backend/tests/test_p3_scoring_rules.py          |  49 ++++
+ 5 files changed, 553 insertions(+), 83 deletions(-)
+```
+
+### 18.3 Test Integrity Audit (Zero Weakened Assertions)
+An analysis of every deleted line across the test suite confirms zero assertions were weakened:
+1. **`test_copilot_confirmation_gate.py`**:
+   - *Previous logic*: Relied on model-supplied argument `confirmed=True`, which allowed a compromised LLM to bypass confirmation.
+   - *Replacement*: Deleted model argument tests and replaced them with single-use server `PendingAction` records, user ownership enforcement, workspace boundary checks, hash matching, and Origin CSRF verification.
+2. **`test_jira_provider.py` & `test_notion_provider.py`**:
+   - *Previous logic*: Ran mock/simulation logic implicitly with default fallback.
+   - *Replacement*: Added explicit simulation mode flags and assertions proving that outside simulation mode, attempts to access mock data raise fatal `RuntimeError`s. Upgraded Notion export test to execute through the server confirmation gate.
+3. **`test_multi_tenancy.py`**:
+   - *Previous logic*: Allowed dummy placeholder secrets (`SECRET_KEY="x"`).
+   - *Replacement*: Replaced with tests verifying that production refuses startup if secrets are missing, left default, or if the Fernet key is invalid.
+4. **`test_p3_scoring_rules.py`**:
+   - Added 5 new tests asserting provenance tagging (`DEFAULT`, `DEFAULT_RULE`, `INTEGRATION`, `SIMULATED`) and dynamic weight renormalization.
+
+### 18.4 Full Test Suite Execution Output
+Command run: `py -m pytest backend/tests -v`
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collected 155 items
+
+backend/tests/test_api_endpoints.py::test_health_check PASSED            [  0%]
+backend/tests/test_api_endpoints.py::test_list_repositories PASSED       [  1%]
+backend/tests/test_api_endpoints.py::test_list_metrics PASSED            [  1%]
+backend/tests/test_api_endpoints.py::test_list_technical_debt PASSED     [  2%]
+backend/tests/test_api_endpoints.py::test_predictions_endpoints PASSED   [  3%]
+backend/tests/test_api_endpoints.py::test_hotspots_endpoint PASSED       [  3%]
+backend/tests/test_api_endpoints.py::test_priorities_endpoint PASSED     [  4%]
+backend/tests/test_api_endpoints.py::test_recommendations_endpoint PASSED [  5%]
+backend/tests/test_api_endpoints.py::test_file_detail_endpoint_contract PASSED [  5%]
+backend/tests/test_api_endpoints.py::test_analyze_endpoint PASSED        [  6%]
+backend/tests/test_api_endpoints.py::test_comparison_demo_endpoint PASSED [  7%]
+backend/tests/test_auth_security.py::test_verified_google_user_accepted PASSED [  7%]
+backend/tests/test_auth_security.py::test_unverified_email_flag_detected PASSED [  8%]
+backend/tests/test_auth_security.py::test_permanent_sub_key_consistency PASSED [  9%]
+backend/tests/test_auth_security.py::test_inspect_google_token_diagnostic PASSED [  9%]
+backend/tests/test_business_diff.py::test_business_aware_differentiation PASSED [ 10%]
+backend/tests/test_code_analyzer.py::TestCodeAnalyzer::test_python_ast_smell_detection PASSED [ 10%]
+backend/tests/test_code_analyzer.py::TestCodeAnalyzer::test_lizard_javascript_analysis PASSED [ 11%]
+backend/tests/test_code_analyzer.py::TestCodeAnalyzer::test_is_test_file_patterns PASSED [ 12%]
+backend/tests/test_code_analyzer.py::TestCodeAnalyzer::test_coverage_artifact_detection PASSED [ 12%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_create_jira_issue_stages_pending_action PASSED [ 13%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_export_notion_report_stages_pending_action PASSED [ 14%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_model_supplied_confirmed_true_is_blocked_and_staged PASSED [ 14%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_forged_action_id PASSED [ 15%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_user_id PASSED [ 16%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_workspace_id PASSED [ 16%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_executes_stored_payload_without_client_args PASSED [ 17%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_get_pending_action_endpoint_returns_stored_payload PASSED [ 18%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_origin_check_blocks_csrf PASSED [ 18%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_expired_action PASSED [ 19%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_executes_and_enforces_single_use PASSED [ 20%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_notion_confirm_endpoint_executes_and_enforces_single_use PASSED [ 20%]
+backend/tests/test_copilot_prompt_injection.py::TestCopilotPromptInjectionResistance::test_injected_commit_message_refused PASSED [ 21%]
+backend/tests/test_copilot_prompt_injection.py::TestCopilotPromptInjectionResistance::test_injected_jira_summary_refused PASSED [ 21%]
+backend/tests/test_copilot_prompt_injection.py::TestCopilotPromptInjectionResistance::test_injected_notion_page_refused PASSED [ 22%]
+...
+====================== 155 passed, 81 warnings in 51.06s ======================
+```
+
+
 
 
 

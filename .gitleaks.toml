@@ -1,8 +1,9 @@
+# Gitleaks Configuration
+# Strict secret scanning with narrow fingerprint allowlist (no broad path bypasses)
+
 [allowlist]
-description = "Global allowlist for test fixtures, mock data, and documentation examples"
-paths = [
-    '''backend/tests/.*''',
-    '''docs/.*''',
-    '''evals/.*''',
-    '''\.github/workflows/.*''',
+description = "Narrow fingerprint allowlist for false positive documentation placeholders and test fixtures"
+stopwords = [
+    "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx"
 ]

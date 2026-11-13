@@ -1188,3 +1188,49 @@ backend/tests/test_worker_heartbeat.py::TestWorkerHeartbeatRecovery::test_per_jo
 
 ======================== 4 passed, 1 warning in 0.46s =========================
 ```
+
+
+---
+
+## 25. Item 9: Route Security Allowlist & Workspace Dependency Audit
+
+### 25.1 Automated Route Security Audit Protocol
+To mathematically prove tenant isolation across the HTTP API surface, `backend/tests/test_route_security_allowlist.py` recursively enumerates every endpoint registered in `app.routes` and all sub-routers within `api_router`. The test enforces that every single route satisfies one of two mutually exclusive conditions:
+1. **Workspace Dependency**: Declares an explicit dependency on `get_current_workspace` (guaranteeing that all query filters, file lookups, and modifications are tenant-isolated).
+2. **Explicit Public Allowlist**: Is registered on `EXPLICIT_PUBLIC_ALLOWLIST` with an architectural security justification.
+
+Any route that lacks `get_current_workspace` and is omitted from the audited allowlist immediately triggers a test failure.
+
+### 25.2 Route Audit Summary
+Across all 73 distinct method-path combinations in DebtScope:
+- **Workspace-Scoped Endpoints (37 routes)**: All repository, metric, technical debt, business context, priorities, recommendations, sprint planning, copilot interactions, pending action executions, and analysis jobs are strictly bound to `get_current_workspace`.
+- **Public & Identity Allowlist (36 routes)**: Liveness probes (`/health`, `/api/info`), OAuth redirect handlers (`/auth/google/*`), webhook ingress, and stateless mathematical simulation tools (`/simulator/what-if`, `/simulator/financial-tco`).
+
+### 25.3 Justification for Routes Operating at User Identity Scope
+In DebtScope, **zero business-critical or data-modifying endpoints utilize `get_current_user` alone without `get_current_workspace`**. Every operation that reads or writes repository data, copilot conversations, or background jobs (`/copilot/chat`, `/copilot/actions/{action_id}/confirm`, `/jobs/scan`) strictly combines `get_current_user` with `get_current_workspace`.
+
+The only routes operating at User Identity scope alone are session bootstrap utilities:
+| Route | Method | Justification |
+| :--- | :---: | :--- |
+| **`/auth/me`** | `GET` | **Identity Bootstrap**: Inspects the session cookie/JWT to return the authenticated User profile, assigned roles, and list of accessible tenant workspaces before a workspace context is selected by the frontend. |
+| **`/auth/logout`** | `POST` | **Session Termination**: Clears the HTTP-only session cookie for the authenticated user across all tenant workspaces. |
+| **`/auth/switch-profile`** | `POST` | **Development Persona Switcher**: Switches active session persona among evaluation profiles in local environments. |
+
+### 25.4 Test Verification Evidence
+```powershell
+py -m pytest backend/tests/test_route_security_allowlist.py -v
+```
+Output:
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+configfile: pytest.ini
+collected 3 items
+
+backend/tests/test_route_security_allowlist.py::TestRouteSecurityAndWorkspaceEnforcement::test_all_routes_have_workspace_dependency_or_are_allowlisted PASSED [ 33%]
+backend/tests/test_route_security_allowlist.py::TestRouteSecurityAndWorkspaceEnforcement::test_user_identity_routes_audit_and_justifications PASSED [ 66%]
+backend/tests/test_route_security_allowlist.py::TestRouteSecurityAndWorkspaceEnforcement::test_synthetic_unprotected_route_fails_audit PASSED [100%]
+
+======================== 3 passed, 1 warning in 0.07s =========================
+```

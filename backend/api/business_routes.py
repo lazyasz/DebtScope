@@ -3,11 +3,12 @@ Business Context API endpoints.
 Provides simulation, CRUD, and runtime configuration for business risk parameters.
 """
 
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
-from backend.database.models import BusinessContext, SourceFile
+from backend.database.models import BusinessContext, SourceFile, Workspace
+from backend.database.tenant import get_current_workspace
 from backend.schemas.business_context import (
     BusinessContextResponse,
     BusinessContextCreate,
@@ -22,15 +23,28 @@ router = APIRouter(prefix="/business-context", tags=["Business Context"])
 
 
 @router.get("", response_model=List[BusinessContextResponse])
-def list_business_contexts(db: Session = Depends(get_db)):
-    """Lists business context parameters across all tracked files."""
-    return BusinessService.get_all_business_contexts(db)
+def list_business_contexts(
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
+    """Lists business context parameters across all tracked files in workspace."""
+    return BusinessService.get_all_business_contexts(db, workspace_id=workspace.id)
 
 
 @router.get("/{file_id}", response_model=BusinessContextResponse)
-def get_business_context_by_file(file_id: int, db: Session = Depends(get_db)):
-    """Fetches business context parameters for a specific file."""
-    ctx = BusinessService.get_business_context_by_file_id(db, file_id)
+def get_business_context_by_file(
+    file_id: int,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
+    """Fetches business context parameters for a specific file in workspace."""
+    file_obj = DataService.get_file_by_id(db, file_id, workspace_id=workspace.id)
+    if not file_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source file with id {file_id} not found in current workspace"
+        )
+    ctx = BusinessService.get_business_context_by_file_id(db, file_id, workspace_id=workspace.id)
     if not ctx:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -40,13 +54,17 @@ def get_business_context_by_file(file_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=BusinessContextResponse, status_code=status.HTTP_201_CREATED)
-def create_business_context(ctx_in: BusinessContextCreate, db: Session = Depends(get_db)):
+def create_business_context(
+    ctx_in: BusinessContextCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Creates or replaces business context for a file."""
-    file_obj = DataService.get_file_by_id(db, ctx_in.file_id)
+    file_obj = DataService.get_file_by_id(db, ctx_in.file_id, workspace_id=workspace.id)
     if not file_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source file with id {ctx_in.file_id} not found"
+            detail=f"Source file with id {ctx_in.file_id} not found in current workspace"
         )
     ctx = BusinessService.get_or_create_business_context(db, ctx_in)
     # Automatically recalculate priority & recommendation for file
@@ -59,17 +77,18 @@ def create_business_context(ctx_in: BusinessContextCreate, db: Session = Depends
 def update_business_context(
     file_id: int,
     update_data: BusinessContextUpdate,
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
     Updates simulated or live business context for a file and recalculates priority.
     Allows engineering leads to adjust business criticality or sprint urgency on the fly.
     """
-    file_obj = DataService.get_file_by_id(db, file_id)
+    file_obj = DataService.get_file_by_id(db, file_id, workspace_id=workspace.id)
     if not file_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source file with id {file_id} not found"
+            detail=f"Source file with id {file_id} not found in current workspace"
         )
 
     ctx = BusinessService.update_business_context(db, file_id, update_data)
@@ -94,11 +113,21 @@ class ApplyBusinessRulesRequest(BaseModel):
 
 
 @router.post("/rules/apply", summary="Apply Path-Pattern Business Rules to Repository")
-def apply_business_rules(payload: ApplyBusinessRulesRequest, db: Session = Depends(get_db)):
+def apply_business_rules(
+    payload: ApplyBusinessRulesRequest,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """
     Applies configurable path-pattern rules (e.g. services/payment/** -> criticality=95)
     across all files in a repository and recalculates priority rankings.
     """
+    repo = DataService.get_repository_by_id(db, payload.repository_id, workspace_id=workspace.id)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Repository {payload.repository_id} not found in current workspace"
+        )
     from backend.services.business_rules_service import BusinessRulesEngine
     count = BusinessRulesEngine.apply_rules_to_repository(
         db,

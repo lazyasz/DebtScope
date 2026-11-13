@@ -13,7 +13,8 @@ import secrets
 from datetime import datetime
 
 from backend.database.connection import get_db
-from backend.database.models import IntegrationConnection, JiraIssueLink, NotionReport
+from backend.database.models import IntegrationConnection, JiraIssueLink, NotionReport, Workspace
+from backend.database.tenant import get_current_workspace
 from backend.integrations.github_provider import GitHubProvider
 from backend.integrations.jira_provider import JiraProvider
 from backend.integrations.notion_provider import NotionProvider
@@ -253,17 +254,19 @@ async def sync_to_notion_database(payload: NotionSyncRequest):
 
 
 @router.post("/notion/create-report", summary="Create Executive Audit Report in Notion")
-async def create_audit_report_in_notion(payload: NotionAuditReportRequest, db: Session = Depends(get_db)):
+async def create_audit_report_in_notion(
+    payload: NotionAuditReportRequest,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Publishes a comprehensive Tech Debt Executive Audit Report to Notion."""
     from backend.services.notion_service import create_notion_audit_report
-    current_user = get_current_user()
-    workspace_id = current_user.get("workspace_id", "ws_demo")
 
     res = await create_notion_audit_report(payload.model_dump())
 
     # Save NotionReport record
     report = NotionReport(
-        workspace_id=workspace_id,
+        workspace_id=workspace.id,
         notion_page_id=res.get("report_id", "adr_mock"),
         title=payload.title or "Executive Technical Debt Audit",
         total_debt_hours=float(res.get("summary", {}).get("total_components", 100)) * 2.5,
@@ -277,24 +280,50 @@ async def create_audit_report_in_notion(payload: NotionAuditReportRequest, db: S
     return res
 
 
+@router.get("/notion/reports", summary="Get Workspace Notion Reports")
+def get_notion_reports(
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
+    """Returns executive Notion audit reports published within current workspace."""
+    reports = db.query(NotionReport).filter(NotionReport.workspace_id == workspace.id).all()
+    return {
+        "status": "success",
+        "workspace_id": workspace.id,
+        "count": len(reports),
+        "reports": [
+            {
+                "id": r.id,
+                "workspace_id": r.workspace_id,
+                "notion_page_id": r.notion_page_id,
+                "title": r.title,
+                "total_debt_hours": r.total_debt_hours,
+                "top_debt_items_count": r.top_debt_items_count,
+                "report_url": r.report_url,
+                "export_status": r.export_status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in reports
+        ]
+    }
+
+
 @router.get("/jira/issues", summary="Get Workspace Linked Jira Issues")
 def get_linked_jira_issues(
     file_id: Optional[int] = None,
     limit: int = 50,
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """Returns Jira issue links mapped to codebase files."""
-    current_user = get_current_user()
-    workspace_id = current_user.get("workspace_id", "ws_demo")
-
-    query = db.query(JiraIssueLink).filter(JiraIssueLink.workspace_id == workspace_id)
+    query = db.query(JiraIssueLink).filter(JiraIssueLink.workspace_id == workspace.id)
     if file_id:
         query = query.filter(JiraIssueLink.file_id == file_id)
 
     issues = query.limit(limit).all()
     return {
         "status": "success",
-        "workspace_id": workspace_id,
+        "workspace_id": workspace.id,
         "count": len(issues),
         "issues": [
             {

@@ -7,7 +7,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
-from backend.database.models import SourceFile, PriorityScore
+from backend.database.models import SourceFile, PriorityScore, Workspace
+from backend.database.tenant import get_current_workspace
 from backend.schemas.priority import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -27,22 +28,23 @@ router = APIRouter(tags=["Priority Engine & Decision Intelligence"])
 @router.post("/analyze", response_model=AnalyzeResponse)
 def trigger_analysis(
     req: Optional[AnalyzeRequest] = None,
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
     Triggers end-to-end priority analysis and recommendation generation
-    across all tracked files or a specific repository.
+    across all tracked files or a specific repository within workspace.
     """
     repo_id = req.repository_id if req else None
-    scores = PriorityService.analyze_all_files(db, repo_id)
-    RecommendationService.generate_all_recommendations(db, repo_id)
+    scores = PriorityService.analyze_all_files(db, repo_id, workspace_id=workspace.id)
+    RecommendationService.generate_all_recommendations(db, repo_id, workspace_id=workspace.id)
 
     crit_cnt = sum(1 for s in scores if s.priority_level == "CRITICAL")
     high_cnt = sum(1 for s in scores if s.priority_level == "HIGH")
     med_cnt = sum(1 for s in scores if s.priority_level == "MEDIUM")
     low_cnt = sum(1 for s in scores if s.priority_level == "LOW")
 
-    ranked = PriorityService.get_ranked_priorities(db, repo_id=repo_id, limit=10)
+    ranked = PriorityService.get_ranked_priorities(db, repo_id=repo_id, workspace_id=workspace.id, limit=10)
 
     return AnalyzeResponse(
         status="success",
@@ -61,6 +63,7 @@ def list_priorities(
     priority_level: Optional[str] = Query(None, description="Filter by level: CRITICAL, HIGH, MEDIUM, LOW"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
@@ -69,6 +72,7 @@ def list_priorities(
     return PriorityService.get_ranked_priorities(
         db=db,
         repo_id=repository_id,
+        workspace_id=workspace.id,
         priority_level=priority_level,
         limit=limit,
         offset=offset,
@@ -79,6 +83,7 @@ def list_priorities(
 def list_recommendations(
     repository_id: Optional[int] = Query(None, description="Filter by repository ID"),
     recommendation_type: Optional[str] = Query(None, description="Filter by recommendation type"),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
@@ -87,6 +92,7 @@ def list_recommendations(
     return RecommendationService.get_recommendations_response(
         db=db,
         repo_id=repository_id,
+        workspace_id=workspace.id,
         recommendation_type=recommendation_type,
     )
 
@@ -94,27 +100,33 @@ def list_recommendations(
 @router.get("/recommendations/sprint-plan", response_model=SprintPlanSummary)
 def get_sprint_plan(
     capacity_points: int = Query(25, ge=5, le=100, description="Available sprint story point budget"),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
     Generates an optimized Sprint Technical Debt budget allocation based on ROI scores.
     """
-    return RecommendationService.get_sprint_plan(db, capacity_points)
+    return RecommendationService.get_sprint_plan(db, capacity_points, workspace_id=workspace.id)
 
 
 @router.get("/files/{file_id}", response_model=FileDetailResponse)
-def get_file_detail(file_id: int, db: Session = Depends(get_db)):
+def get_file_detail(
+    file_id: int,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """
     Deep-dive technical debt profile for a specific file.
     Matches the Part 8 API response contract with mathematical breakdown.
     """
-    detail = PriorityService.get_file_detail_response(db, file_id)
+    detail = PriorityService.get_file_detail_response(db, file_id, workspace_id=workspace.id)
     if not detail:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source file with id {file_id} not found"
         )
     return detail
+
 
 
 @router.get("/comparison/demo", response_model=ComparisonDemoResponse)

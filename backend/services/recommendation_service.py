@@ -67,6 +67,7 @@ class RecommendationService:
         rec_obj = file_obj.recommendations[0] if file_obj.recommendations else None
         if not rec_obj:
             rec_obj = Recommendation(
+                workspace_id=file_obj.workspace_id,
                 file_id=file_id,
                 recommendation_type=rec_type,
                 action_summary=action_summary,
@@ -87,8 +88,10 @@ class RecommendationService:
         return rec_obj
 
     @classmethod
-    def generate_all_recommendations(cls, db: Session, repo_id: Optional[int] = None) -> List[Recommendation]:
+    def generate_all_recommendations(cls, db: Session, repo_id: Optional[int] = None, workspace_id: Optional[str] = None) -> List[Recommendation]:
         query = db.query(SourceFile).filter(SourceFile.is_active == True)
+        if workspace_id:
+            query = query.filter(SourceFile.workspace_id == workspace_id)
         if repo_id:
             query = query.filter(SourceFile.repository_id == repo_id)
         
@@ -105,9 +108,12 @@ class RecommendationService:
         cls,
         db: Session,
         repo_id: Optional[int] = None,
+        workspace_id: Optional[str] = None,
         recommendation_type: Optional[str] = None
     ) -> List[RecommendationResponse]:
         query = db.query(Recommendation).join(SourceFile).filter(SourceFile.is_active == True)
+        if workspace_id:
+            query = query.filter(Recommendation.workspace_id == workspace_id)
         if repo_id:
             query = query.filter(SourceFile.repository_id == repo_id)
         if recommendation_type:
@@ -139,10 +145,11 @@ class RecommendationService:
         return results
 
     @classmethod
-    def get_sprint_plan(cls, db: Session, capacity_points: int = 25) -> SprintPlanSummary:
-        recs = cls.get_recommendations_response(db)
+    def get_sprint_plan(cls, db: Session, capacity_points: int = 25, workspace_id: Optional[str] = None) -> SprintPlanSummary:
+        recs = cls.get_recommendations_response(db, workspace_id=workspace_id)
         allocated = []
         total_points = 0
+
 
         # Prioritize CRITICAL and HIGH recommendations
         for r in recs:

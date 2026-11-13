@@ -14,7 +14,10 @@ class BusinessService:
     def get_or_create_business_context(db: Session, ctx_in: BusinessContextCreate) -> BusinessContext:
         ctx = db.query(BusinessContext).filter(BusinessContext.file_id == ctx_in.file_id).first()
         if not ctx:
+            file_obj = db.query(SourceFile).filter(SourceFile.id == ctx_in.file_id).first()
+            ws_id = file_obj.workspace_id if file_obj else "ws_demo"
             ctx = BusinessContext(
+                workspace_id=ws_id,
                 file_id=ctx_in.file_id,
                 business_criticality=ctx_in.business_criticality,
                 customer_impact=ctx_in.customer_impact,
@@ -48,7 +51,7 @@ class BusinessService:
             file_obj = db.query(SourceFile).filter(SourceFile.id == file_id).first()
             if not file_obj:
                 return None
-            ctx = BusinessContext(file_id=file_id)
+            ctx = BusinessContext(file_id=file_id, workspace_id=file_obj.workspace_id)
             db.add(ctx)
 
         for field, value in update_data.model_dump(exclude_unset=True).items():
@@ -59,9 +62,15 @@ class BusinessService:
         return ctx
 
     @staticmethod
-    def get_business_context_by_file_id(db: Session, file_id: int) -> Optional[BusinessContext]:
-        return db.query(BusinessContext).filter(BusinessContext.file_id == file_id).first()
+    def get_business_context_by_file_id(db: Session, file_id: int, workspace_id: Optional[str] = None) -> Optional[BusinessContext]:
+        query = db.query(BusinessContext).filter(BusinessContext.file_id == file_id)
+        if workspace_id:
+            query = query.filter(BusinessContext.workspace_id == workspace_id)
+        return query.first()
 
     @staticmethod
-    def get_all_business_contexts(db: Session) -> List[BusinessContext]:
-        return db.query(BusinessContext).all()
+    def get_all_business_contexts(db: Session, workspace_id: Optional[str] = None) -> List[BusinessContext]:
+        query = db.query(BusinessContext)
+        if workspace_id:
+            query = query.filter(BusinessContext.workspace_id == workspace_id)
+        return query.all()

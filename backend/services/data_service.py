@@ -12,10 +12,15 @@ from backend.schemas.metrics import EngineeringMetricCreate, TechnicalDebtItemCr
 
 class DataService:
     @staticmethod
-    def get_or_create_repository(db: Session, repo_in: RepositoryCreate) -> Repository:
-        repo = db.query(Repository).filter(Repository.name == repo_in.name).first()
+    def get_or_create_repository(db: Session, repo_in: RepositoryCreate, workspace_id: Optional[str] = "ws_demo") -> Repository:
+        ws_id = workspace_id or "ws_demo"
+        repo = db.query(Repository).filter(
+            Repository.workspace_id == ws_id,
+            Repository.name == repo_in.name
+        ).first()
         if not repo:
             repo = Repository(
+                workspace_id=ws_id,
                 name=repo_in.name,
                 url=repo_in.url,
                 default_branch=repo_in.default_branch,
@@ -26,21 +31,30 @@ class DataService:
         return repo
 
     @staticmethod
-    def get_all_repositories(db: Session) -> List[Repository]:
-        return db.query(Repository).all()
+    def get_all_repositories(db: Session, workspace_id: Optional[str] = None) -> List[Repository]:
+        query = db.query(Repository)
+        if workspace_id:
+            query = query.filter(Repository.workspace_id == workspace_id)
+        return query.all()
 
     @staticmethod
-    def get_repository_by_id(db: Session, repo_id: int) -> Optional[Repository]:
-        return db.query(Repository).filter(Repository.id == repo_id).first()
+    def get_repository_by_id(db: Session, repo_id: int, workspace_id: Optional[str] = None) -> Optional[Repository]:
+        query = db.query(Repository).filter(Repository.id == repo_id)
+        if workspace_id:
+            query = query.filter(Repository.workspace_id == workspace_id)
+        return query.first()
 
     @staticmethod
-    def get_or_create_file(db: Session, file_in: SourceFileCreate) -> SourceFile:
+    def get_or_create_file(db: Session, file_in: SourceFileCreate, workspace_id: Optional[str] = "ws_demo") -> SourceFile:
+        ws_id = workspace_id or "ws_demo"
         file_obj = db.query(SourceFile).filter(
+            SourceFile.workspace_id == ws_id,
             SourceFile.repository_id == file_in.repository_id,
             SourceFile.file_path == file_in.file_path
         ).first()
         if not file_obj:
             file_obj = SourceFile(
+                workspace_id=ws_id,
                 repository_id=file_in.repository_id,
                 file_path=file_in.file_path,
                 file_name=file_in.file_name,
@@ -54,12 +68,19 @@ class DataService:
         return file_obj
 
     @staticmethod
-    def get_file_by_id(db: Session, file_id: int) -> Optional[SourceFile]:
-        return db.query(SourceFile).filter(SourceFile.id == file_id).first()
+    def get_file_by_id(db: Session, file_id: int, workspace_id: Optional[str] = None) -> Optional[SourceFile]:
+        query = db.query(SourceFile).filter(SourceFile.id == file_id)
+        if workspace_id:
+            query = query.filter(SourceFile.workspace_id == workspace_id)
+        return query.first()
 
     @staticmethod
-    def get_files_by_repository(db: Session, repo_id: int) -> List[SourceFile]:
-        return db.query(SourceFile).filter(SourceFile.repository_id == repo_id).all()
+    def get_files_by_repository(db: Session, repo_id: int, workspace_id: Optional[str] = None) -> List[SourceFile]:
+        query = db.query(SourceFile).filter(SourceFile.repository_id == repo_id)
+        if workspace_id:
+            query = query.filter(SourceFile.workspace_id == workspace_id)
+        return query.all()
+
 
     @staticmethod
     def compute_static_technical_risk(
@@ -106,6 +127,8 @@ class DataService:
 
     @classmethod
     def ingest_engineering_metric(cls, db: Session, metric_in: EngineeringMetricCreate) -> EngineeringMetric:
+        file_obj = db.query(SourceFile).filter(SourceFile.id == metric_in.file_id).first()
+        ws_id = file_obj.workspace_id if file_obj else "ws_demo"
         metric = db.query(EngineeringMetric).filter(EngineeringMetric.file_id == metric_in.file_id).first()
         
         calculated_risk = metric_in.technical_risk_score
@@ -121,6 +144,7 @@ class DataService:
 
         if not metric:
             metric = EngineeringMetric(
+                workspace_id=ws_id,
                 file_id=metric_in.file_id,
                 cyclomatic_complexity=metric_in.cyclomatic_complexity,
                 cognitive_complexity=metric_in.cognitive_complexity,
@@ -148,7 +172,10 @@ class DataService:
 
     @staticmethod
     def add_technical_debt_item(db: Session, item_in: TechnicalDebtItemCreate) -> TechnicalDebtItem:
+        file_obj = db.query(SourceFile).filter(SourceFile.id == item_in.file_id).first()
+        ws_id = file_obj.workspace_id if file_obj else "ws_demo"
         item = TechnicalDebtItem(
+            workspace_id=ws_id,
             file_id=item_in.file_id,
             debt_category=item_in.debt_category,
             severity=item_in.severity,
@@ -163,8 +190,10 @@ class DataService:
         return item
 
     @staticmethod
-    def get_all_debt_items(db: Session, severity: Optional[str] = None) -> List[TechnicalDebtItem]:
+    def get_all_debt_items(db: Session, severity: Optional[str] = None, workspace_id: Optional[str] = None) -> List[TechnicalDebtItem]:
         query = db.query(TechnicalDebtItem)
+        if workspace_id:
+            query = query.filter(TechnicalDebtItem.workspace_id == workspace_id)
         if severity:
             query = query.filter(TechnicalDebtItem.severity == severity.upper())
         return query.all()

@@ -137,6 +137,7 @@ class PriorityService:
         priority_record = file_obj.priority_score
         if not priority_record:
             priority_record = PriorityScore(
+                workspace_id=file_obj.workspace_id,
                 file_id=file_id,
                 composite_technical_risk=round(composite_tech_risk, 2),
                 composite_business_impact=round(composite_business_impact, 2),
@@ -171,8 +172,10 @@ class PriorityService:
 
 
     @classmethod
-    def analyze_all_files(cls, db: Session, repo_id: Optional[int] = None) -> List[PriorityScore]:
+    def analyze_all_files(cls, db: Session, repo_id: Optional[int] = None, workspace_id: Optional[str] = None) -> List[PriorityScore]:
         query = db.query(SourceFile).filter(SourceFile.is_active == True)
+        if workspace_id:
+            query = query.filter(SourceFile.workspace_id == workspace_id)
         if repo_id:
             query = query.filter(SourceFile.repository_id == repo_id)
         
@@ -251,10 +254,14 @@ class PriorityService:
         return results
 
     @classmethod
-    def get_file_detail_response(cls, db: Session, file_id: int) -> Optional[FileDetailResponse]:
-        file_obj = db.query(SourceFile).filter(SourceFile.id == file_id).first()
+    def get_file_detail_response(cls, db: Session, file_id: int, workspace_id: Optional[str] = None) -> Optional[FileDetailResponse]:
+        query = db.query(SourceFile).filter(SourceFile.id == file_id)
+        if workspace_id:
+            query = query.filter(SourceFile.workspace_id == workspace_id)
+        file_obj = query.first()
         if not file_obj:
             return None
+
 
         # Ensure priority is computed
         score = file_obj.priority_score

@@ -14,7 +14,10 @@ class PredictionService:
     def ingest_prediction(db: Session, pred_in: MLPredictionCreate) -> MLPrediction:
         prediction = db.query(MLPrediction).filter(MLPrediction.file_id == pred_in.file_id).first()
         if not prediction:
+            file_obj = db.query(SourceFile).filter(SourceFile.id == pred_in.file_id).first()
+            ws_id = file_obj.workspace_id if file_obj else "ws_demo"
             prediction = MLPrediction(
+                workspace_id=ws_id,
                 file_id=pred_in.file_id,
                 predicted_future_risk=pred_in.predicted_future_risk,
                 defect_probability=pred_in.defect_probability,
@@ -58,9 +61,15 @@ class PredictionService:
         return results
 
     @staticmethod
-    def get_prediction_by_file_id(db: Session, file_id: int) -> Optional[MLPrediction]:
-        return db.query(MLPrediction).filter(MLPrediction.file_id == file_id).first()
+    def get_prediction_by_file_id(db: Session, file_id: int, workspace_id: Optional[str] = None) -> Optional[MLPrediction]:
+        query = db.query(MLPrediction).filter(MLPrediction.file_id == file_id)
+        if workspace_id:
+            query = query.filter(MLPrediction.workspace_id == workspace_id)
+        return query.first()
 
     @staticmethod
-    def get_all_predictions(db: Session) -> List[MLPrediction]:
-        return db.query(MLPrediction).all()
+    def get_all_predictions(db: Session, workspace_id: Optional[str] = None) -> List[MLPrediction]:
+        query = db.query(MLPrediction)
+        if workspace_id:
+            query = query.filter(MLPrediction.workspace_id == workspace_id)
+        return query.all()

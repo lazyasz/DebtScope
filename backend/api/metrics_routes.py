@@ -7,7 +7,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
-from backend.database.models import EngineeringMetric, SourceFile, TechnicalDebtItem
+from backend.database.models import EngineeringMetric, SourceFile, TechnicalDebtItem, Workspace
+from backend.database.tenant import get_current_workspace
+
 from backend.schemas.metrics import (
     EngineeringMetricResponse,
     EngineeringMetricCreate,
@@ -24,12 +26,17 @@ router = APIRouter(tags=["Engineering Metrics & Technical Debt"])
 @router.get("/metrics", response_model=List[FileDebtOverview])
 def list_metrics(
     repository_id: Optional[int] = Query(None, description="Filter by repository ID"),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """Lists code metrics and technical debt health indicators across files."""
-    query = db.query(SourceFile).filter(SourceFile.is_active == True)
+    query = db.query(SourceFile).filter(
+        SourceFile.workspace_id == workspace.id,
+        SourceFile.is_active == True
+    )
     if repository_id:
         query = query.filter(SourceFile.repository_id == repository_id)
+
 
     files = query.all()
     results = []
@@ -54,13 +61,17 @@ def list_metrics(
 
 
 @router.post("/metrics/ingest", response_model=EngineeringMetricResponse, status_code=status.HTTP_201_CREATED)
-def ingest_file_metric(metric_in: EngineeringMetricCreate, db: Session = Depends(get_db)):
+def ingest_file_metric(
+    metric_in: EngineeringMetricCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Ingests or updates code quality metrics from Member 1 Data Pipeline."""
-    file_obj = DataService.get_file_by_id(db, metric_in.file_id)
+    file_obj = DataService.get_file_by_id(db, metric_in.file_id, workspace_id=workspace.id)
     if not file_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source file with id {metric_in.file_id} not found"
+            detail=f"Source file with id {metric_in.file_id} not found in current workspace"
         )
     return DataService.ingest_engineering_metric(db, metric_in)
 
@@ -69,10 +80,11 @@ def ingest_file_metric(metric_in: EngineeringMetricCreate, db: Session = Depends
 def list_technical_debt(
     severity: Optional[str] = Query(None, description="Filter by severity (LOW, MEDIUM, HIGH, CRITICAL)"),
     file_id: Optional[int] = Query(None, description="Filter by file ID"),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """Lists granular technical debt items across tracked files."""
-    query = db.query(TechnicalDebtItem)
+    query = db.query(TechnicalDebtItem).filter(TechnicalDebtItem.workspace_id == workspace.id)
     if severity:
         query = query.filter(TechnicalDebtItem.severity == severity.upper())
     if file_id:
@@ -80,14 +92,19 @@ def list_technical_debt(
     return query.all()
 
 
+
 @router.post("/technical-debt", response_model=TechnicalDebtItemResponse, status_code=status.HTTP_201_CREATED)
-def add_technical_debt_item(item_in: TechnicalDebtItemCreate, db: Session = Depends(get_db)):
+def add_technical_debt_item(
+    item_in: TechnicalDebtItemCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Adds a specific technical debt finding for a file."""
-    file_obj = DataService.get_file_by_id(db, item_in.file_id)
+    file_obj = DataService.get_file_by_id(db, item_in.file_id, workspace_id=workspace.id)
     if not file_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source file with id {item_in.file_id} not found"
+            detail=f"Source file with id {item_in.file_id} not found in current workspace"
         )
     return DataService.add_technical_debt_item(db, item_in)
 
@@ -95,15 +112,20 @@ def add_technical_debt_item(item_in: TechnicalDebtItemCreate, db: Session = Depe
 @router.get("/hotspots", response_model=List[HotspotResponse])
 def get_hotspots(
     repository_id: Optional[int] = Query(None, description="Filter by repository ID"),
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db)
 ):
     """
     Identifies high-risk hotspots categorized by Technical vs Business dimensions.
     Enables engineering teams to see high risk clusters at a glance.
     """
-    query = db.query(SourceFile).filter(SourceFile.is_active == True)
+    query = db.query(SourceFile).filter(
+        SourceFile.workspace_id == workspace.id,
+        SourceFile.is_active == True
+    )
     if repository_id:
         query = query.filter(SourceFile.repository_id == repository_id)
+
 
     files = query.all()
     hotspots = []
@@ -153,9 +175,15 @@ def get_hotspots(
 
 
 @router.get("/metrics/dashboard")
-def get_dashboard_summary(db: Session = Depends(get_db)):
+def get_dashboard_summary(
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Computes real-time executive dashboard KPIs and distribution metrics from live DB data."""
-    files = db.query(SourceFile).filter(SourceFile.is_active == True).all()
+    files = db.query(SourceFile).filter(
+        SourceFile.workspace_id == workspace.id,
+        SourceFile.is_active == True
+    ).all()
     if not files:
         # Fallback defaults if empty
         return {

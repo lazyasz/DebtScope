@@ -7,7 +7,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
-from backend.database.models import Repository, SourceFile, PriorityScore
+from backend.database.models import Repository, SourceFile, PriorityScore, Workspace
+from backend.database.tenant import get_current_workspace
 from backend.schemas.repository import (
     RepositoryCreate,
     RepositoryResponse,
@@ -21,9 +22,12 @@ router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
 
 @router.get("", response_model=List[RepositorySummary])
-def list_repositories(db: Session = Depends(get_db)):
-    """Lists all tracked repositories with debt and health summaries."""
-    repos = DataService.get_all_repositories(db)
+def list_repositories(
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
+    """Lists all tracked repositories in workspace with debt and health summaries."""
+    repos = DataService.get_all_repositories(db, workspace_id=workspace.id)
     results = []
     for r in repos:
         files = r.files
@@ -57,37 +61,54 @@ def list_repositories(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=RepositoryResponse, status_code=status.HTTP_201_CREATED)
-def create_repository(repo_in: RepositoryCreate, db: Session = Depends(get_db)):
+def create_repository(
+    repo_in: RepositoryCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Registers a new code repository for technical debt analysis."""
-    return DataService.get_or_create_repository(db, repo_in)
+    return DataService.get_or_create_repository(db, repo_in, workspace_id=workspace.id)
 
 
 @router.get("/{repo_id}", response_model=RepositoryResponse)
-def get_repository(repo_id: int, db: Session = Depends(get_db)):
+def get_repository(
+    repo_id: int,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Fetches details for a single repository."""
-    repo = DataService.get_repository_by_id(db, repo_id)
+    repo = DataService.get_repository_by_id(db, repo_id, workspace_id=workspace.id)
     if not repo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found in current workspace")
     return repo
 
 
 @router.get("/{repo_id}/files", response_model=List[SourceFileResponse])
-def get_repository_files(repo_id: int, db: Session = Depends(get_db)):
+def get_repository_files(
+    repo_id: int,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Lists all source files registered in a repository."""
-    repo = DataService.get_repository_by_id(db, repo_id)
+    repo = DataService.get_repository_by_id(db, repo_id, workspace_id=workspace.id)
     if not repo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found")
-    return DataService.get_files_by_repository(db, repo_id)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found in current workspace")
+    return DataService.get_files_by_repository(db, repo_id, workspace_id=workspace.id)
 
 
 @router.post("/{repo_id}/files", response_model=SourceFileResponse, status_code=status.HTTP_201_CREATED)
-def add_file_to_repository(repo_id: int, file_in: SourceFileCreate, db: Session = Depends(get_db)):
+def add_file_to_repository(
+    repo_id: int,
+    file_in: SourceFileCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
     """Registers a new source file to a repository."""
-    repo = DataService.get_repository_by_id(db, repo_id)
+    repo = DataService.get_repository_by_id(db, repo_id, workspace_id=workspace.id)
     if not repo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository with id {repo_id} not found in current workspace")
     file_in.repository_id = repo_id
-    return DataService.get_or_create_file(db, file_in)
+    return DataService.get_or_create_file(db, file_in, workspace_id=workspace.id)
 
 
 from pydantic import BaseModel, Field
@@ -101,6 +122,7 @@ class RepoScanRequest(BaseModel):
 def scan_repository(
     payload: RepoScanRequest,
     background_tasks: BackgroundTasks,
+    workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
     """
@@ -110,17 +132,12 @@ def scan_repository(
     """
     if payload.background:
         from backend.api.jobs_routes import trigger_repository_scan, ScanRepoRequest
-        from backend.database.tenant import get_current_workspace, get_current_user
-        # Delegate to background scan logic
-        # We can directly invoke trigger_repository_scan with default demo workspace
-        from backend.database.models import Workspace
-        ws = db.query(Workspace).filter(Workspace.id == "ws_demo").first()
         import uuid
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         from backend.database.models import AnalysisJob
         job = AnalysisJob(
             id=job_id,
-            workspace_id="ws_demo",
+            workspace_id=workspace.id,
             repo_url=payload.url,
             status="QUEUED",
             stage="Queued for analysis...",

@@ -1234,3 +1234,42 @@ backend/tests/test_route_security_allowlist.py::TestRouteSecurityAndWorkspaceEnf
 
 ======================== 3 passed, 1 warning in 0.07s =========================
 ```
+
+
+---
+
+## 26. Item 10: Private Key & Certificate Exclusion Audit (*.pem, *.key, *.p12)
+
+### 26.1 Configuration
+Added explicit pattern matching to `.gitignore` to prevent inadvertent tracking of cryptographic materials, TLS certificates, and private key containers:
+```gitignore
+# Certificates, Keys & Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+```
+
+### 26.2 Verification of Git Exclusion
+```powershell
+git check-ignore -v test.pem test.key test.p12 test.pfx test.crt
+```
+Output:
+```text
+.gitignore:30:*.pem	test.pem
+.gitignore:31:*.key	test.key
+.gitignore:32:*.p12	test.p12
+.gitignore:33:*.pfx	test.pfx
+.gitignore:34:*.crt	test.crt
+```
+
+### 26.3 Historical Scan
+Executed historical audit across all branches and commits:
+```powershell
+git log --all --full-history -- "*.pem" "*.key" "*.p12"
+```
+Output:
+```text
+(0 commits found — no certificate or key files have ever been committed)
+```

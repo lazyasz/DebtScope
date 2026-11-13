@@ -59,7 +59,12 @@ class PriorityService:
         normalized_debt_age = min(100.0, (max_debt_age / 365.0) * 100.0)
 
         # ── ADR 010: Dynamic Weight Renormalization & Missing Dimensions ───
-        # Dimension Availability Matrix:
+        b_prov = getattr(bctx, "provenance", "DEFAULT") if bctx else "DEFAULT"
+        is_tech_only = b_prov in ("DEFAULT", "DEFAULT_RULE")
+
+        # In technical-only mode (business context unconfigured/default), business impact
+        # and release urgency contain path-name guesses/heuristics and are excluded from
+        # active dimensions, dynamically renormalizing across technical dimensions.
         dim_matrix = {
             "technical_risk": {
                 "val": composite_tech_risk,
@@ -69,12 +74,12 @@ class PriorityService:
             "business_impact": {
                 "val": composite_business_impact,
                 "weight": settings.WEIGHT_BUSINESS_IMPACT,
-                "available": bctx is not None,
+                "available": bctx is not None and not is_tech_only,
             },
             "release_urgency": {
                 "val": composite_urgency,
                 "weight": settings.WEIGHT_RELEASE_URGENCY,
-                "available": bctx is not None and getattr(bctx, "sprint_urgency", None) is not None,
+                "available": bctx is not None and not is_tech_only and getattr(bctx, "sprint_urgency", None) is not None,
             },
             "maintenance_cost": {
                 "val": maint_cost,
@@ -101,8 +106,7 @@ class PriorityService:
             baseline_score = composite_tech_risk
 
         scored_dims_count = len(active_dims)
-        b_prov = getattr(bctx, "provenance", "DEFAULT") if bctx else "DEFAULT"
-        if b_prov in ("DEFAULT", "DEFAULT_RULE"):
+        if is_tech_only:
             dim_coverage_text = f"{scored_dims_count} of 5 dimensions — technical-only (business context not configured)"
         elif b_prov == "SIMULATED":
             dim_coverage_text = f"{scored_dims_count} of 5 dimensions (simulated data, excluded from confidence)"
@@ -120,7 +124,8 @@ class PriorityService:
         final_score = max(0.0, min(100.0, final_score))
 
         # Categorize Priority Level
-        if final_score >= 80.0 or (composite_business_impact >= 85.0 and composite_tech_risk >= 75.0):
+        # In technical-only mode, unconfigured business impact cannot promote to CRITICAL
+        if final_score >= 80.0 or (not is_tech_only and composite_business_impact >= 85.0 and composite_tech_risk >= 75.0):
             priority_level = "CRITICAL"
         elif final_score >= 60.0:
             priority_level = "HIGH"

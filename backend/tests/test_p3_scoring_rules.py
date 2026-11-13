@@ -228,7 +228,88 @@ def test_provenance_honesty_and_technical_only_labeling(db_session):
     ctx.provenance = "SIMULATED"
     db_session.commit()
     score_sim = PriorityService.calculate_file_priority(db_session, f_default.id)
-    assert "simulated data, excluded from confidence" in score_sim.dimension_coverage
+    assert "(simulated data, excluded from confidence)" in score_sim.dimension_coverage
+
+
+def test_technical_only_mode_has_no_path_name_heuristic_bias(db_session):
+    """
+    WS1 Item 2: Verifies that in technical-only mode (business context not configured,
+    provenance in DEFAULT or DEFAULT_RULE), the path-name heuristic (+31.75 on is_core files)
+    is completely removed from the priority score calculation. Two files with identical
+    technical metrics but different file paths ('core/auth' vs 'utils/calc') must receive
+    identical priority scores and identical baseline scores.
+    """
+    repo = DataService.get_or_create_repository(
+        db_session, RepositoryCreate(name="heuristic-test-repo", url="https://github.com/test/heuristic.git")
+    )
+    # File 1: Core/Auth path (triggers is_core heuristic)
+    f_core = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="src/core/auth_handler.py", file_name="auth_handler.py", language="Python", lines_of_code=200)
+    )
+    DataService.ingest_engineering_metric(
+        db_session,
+        EngineeringMetricCreate(file_id=f_core.id, cyclomatic_complexity=15.0, technical_risk_score=60.0)
+    )
+    # Default rule business context with is_core boost
+    BusinessService.get_or_create_business_context(
+        db_session,
+        BusinessContextCreate(
+            file_id=f_core.id,
+            business_criticality=90.0,
+            customer_impact=85.0,
+            module_criticality=85.0,
+            maintenance_cost=50.0,
+            estimated_remediation_effort=50.0,
+            domain_tag="core"
+        )
+    )
+    bctx_core = db_session.query(BusinessContext).filter(BusinessContext.file_id == f_core.id).first()
+    bctx_core.provenance = "DEFAULT_RULE"
+    db_session.commit()
+
+    # File 2: Non-core utility path (no is_core boost)
+    f_util = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="src/utils/calc.py", file_name="calc.py", language="Python", lines_of_code=200)
+    )
+    DataService.ingest_engineering_metric(
+        db_session,
+        EngineeringMetricCreate(file_id=f_util.id, cyclomatic_complexity=15.0, technical_risk_score=60.0)
+    )
+    # Default business context without is_core boost
+    BusinessService.get_or_create_business_context(
+        db_session,
+        BusinessContextCreate(
+            file_id=f_util.id,
+            business_criticality=60.0,
+            customer_impact=50.0,
+            module_criticality=55.0,
+            maintenance_cost=50.0,
+            estimated_remediation_effort=50.0,
+            domain_tag="utility"
+        )
+    )
+    bctx_util = db_session.query(BusinessContext).filter(BusinessContext.file_id == f_util.id).first()
+    bctx_util.provenance = "DEFAULT"
+    db_session.commit()
+
+    # Calculate priorities
+    score_core = PriorityService.calculate_file_priority(db_session, f_core.id)
+    score_util = PriorityService.calculate_file_priority(db_session, f_util.id)
+
+    # Both must be labeled as technical-only
+    assert "technical-only" in score_core.dimension_coverage
+    assert "technical-only" in score_util.dimension_coverage
+
+    # Under technical-only mode, path-name guesses MUST NOT affect priority score or baseline
+    assert score_core.baseline_score == score_util.baseline_score, (
+        f"Path heuristic leaked into baseline_score: core={score_core.baseline_score} != util={score_util.baseline_score}"
+    )
+    assert score_core.final_priority_score == score_util.final_priority_score, (
+        f"Path heuristic leaked into final_priority_score: core={score_core.final_priority_score} != util={score_util.final_priority_score}"
+    )
+    assert score_core.priority_level == score_util.priority_level
 
 
 def test_non_source_exclusion_from_default_priorities(db_session):

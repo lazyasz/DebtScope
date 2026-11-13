@@ -197,20 +197,71 @@ class TestDEVSandboxAuth:
         assert "NOTION_SIMULATION_MODE=True is not allowed" in str(exc_info.value)
 
     def test_production_mode_allowed_when_all_simulations_false(self):
-        """When all simulation flags are False, production environment instantiates cleanly."""
+        """When all simulation flags are False and valid secrets are supplied, production instantiates cleanly."""
         from backend.config import Settings
+        from cryptography.fernet import Fernet
+        valid_fernet = Fernet.generate_key().decode()
         s = Settings(
             DEV_SANDBOX_AUTH=False,
             JIRA_SIMULATION_MODE=False,
             NOTION_SIMULATION_MODE=False,
             ENVIRONMENT="production",
-            SECRET_KEY="x",
-            JWT_SECRET="x",
+            SECRET_KEY="secure-production-session-secret-key-12345",
+            JWT_SECRET="secure-production-jwt-token-secret-key-12345",
+            TOKEN_ENCRYPTION_KEY=valid_fernet,
         )
         assert s.ENVIRONMENT == "production"
         assert s.DEV_SANDBOX_AUTH is False
         assert s.JIRA_SIMULATION_MODE is False
         assert s.NOTION_SIMULATION_MODE is False
+
+    def test_production_refuses_default_session_secret(self):
+        """In production, default or empty SECRET_KEY raises RuntimeError."""
+        from backend.config import Settings
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key().decode()
+        with pytest.raises(RuntimeError, match="SECRET_KEY is missing or using an insecure default"):
+            Settings(
+                ENVIRONMENT="production",
+                DEV_SANDBOX_AUTH=False,
+                SECRET_KEY="super-secret-key-change-in-production-2026",
+                JWT_SECRET="valid-secret-1234567890",
+                TOKEN_ENCRYPTION_KEY=key,
+            )
+
+    def test_production_refuses_default_jwt_secret(self):
+        """In production, default or empty JWT_SECRET raises RuntimeError."""
+        from backend.config import Settings
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key().decode()
+        with pytest.raises(RuntimeError, match="JWT_SECRET is missing or using an insecure default"):
+            Settings(
+                ENVIRONMENT="production",
+                DEV_SANDBOX_AUTH=False,
+                SECRET_KEY="valid-secret-1234567890",
+                JWT_SECRET="pei-jwt-secret-key-production-2026",
+                TOKEN_ENCRYPTION_KEY=key,
+            )
+
+    def test_production_refuses_missing_or_invalid_fernet_key(self):
+        """In production, missing or non-Fernet TOKEN_ENCRYPTION_KEY raises RuntimeError."""
+        from backend.config import Settings
+        with pytest.raises(RuntimeError, match="TOKEN_ENCRYPTION_KEY is missing or using an insecure default"):
+            Settings(
+                ENVIRONMENT="production",
+                DEV_SANDBOX_AUTH=False,
+                SECRET_KEY="valid-secret-1234567890",
+                JWT_SECRET="valid-secret-1234567890",
+                TOKEN_ENCRYPTION_KEY="",
+            )
+        with pytest.raises(RuntimeError, match="not a valid 32-byte Fernet key"):
+            Settings(
+                ENVIRONMENT="production",
+                DEV_SANDBOX_AUTH=False,
+                SECRET_KEY="valid-secret-1234567890",
+                JWT_SECRET="valid-secret-1234567890",
+                TOKEN_ENCRYPTION_KEY="not-a-valid-fernet-key",
+            )
 
     def test_sandbox_auth_allowed_in_development(self):
         """DEV_SANDBOX_AUTH=True + ENVIRONMENT=development must NOT raise."""
@@ -237,13 +288,10 @@ class TestDEVSandboxAuth:
         monkeypatch.delenv("JIRA_SIMULATION_MODE", raising=False)
         monkeypatch.delenv("NOTION_SIMULATION_MODE", raising=False)
 
-        # 1. Settings instantiated with empty env defaults strictly to production
-        s = Settings(_env_file=None)
-        assert s.ENVIRONMENT == "production"
-        assert s.DEV_SANDBOX_AUTH is False
-        assert s.JIRA_SIMULATION_MODE is False
-        assert s.NOTION_SIMULATION_MODE is False
-        assert s.DEBUG is False
+        # 1. Settings instantiated with empty env defaults strictly to production and refuses startup
+        with pytest.raises(RuntimeError) as exc_info:
+            Settings(_env_file=None)
+        assert "Startup refused in production" in str(exc_info.value)
 
         # 2. In production, cookies are secure by default
         orig_env = settings.ENVIRONMENT

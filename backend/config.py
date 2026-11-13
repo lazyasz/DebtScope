@@ -116,7 +116,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_sandbox_production(self) -> "Settings":
-        """Refuse to start with sandbox/simulated modes in production."""
+        """Refuse to start with sandbox/simulated modes or insecure default secrets in production."""
         if self.ENVIRONMENT == "production":
             if self.DEV_SANDBOX_AUTH:
                 raise RuntimeError(
@@ -133,6 +133,52 @@ class Settings(BaseSettings):
                     "NOTION_SIMULATION_MODE=True is not allowed when ENVIRONMENT=production. "
                     "Set NOTION_SIMULATION_MODE=False and configure live Notion credentials in production."
                 )
+
+            # Production session secret check
+            insecure_secret_defaults = {
+                "",
+                "super-secret-key-change-in-production-2026",
+                "change-me-in-production-32-random-chars",
+                "change-me",
+            }
+            if not self.SECRET_KEY or self.SECRET_KEY in insecure_secret_defaults:
+                raise RuntimeError(
+                    "Startup refused in production: SECRET_KEY is missing or using an insecure default. "
+                    "Set a secure, unique random SECRET_KEY in your production .env file."
+                )
+
+            # Production JWT secret check
+            insecure_jwt_defaults = {
+                "",
+                "pei-jwt-secret-key-production-2026",
+                "change-me-in-production-32-random-chars",
+                "change-me",
+            }
+            if not self.JWT_SECRET or self.JWT_SECRET in insecure_jwt_defaults:
+                raise RuntimeError(
+                    "Startup refused in production: JWT_SECRET is missing or using an insecure default. "
+                    "Set a secure, unique random JWT_SECRET in your production .env file."
+                )
+
+            # Production token encryption key check
+            insecure_token_defaults = {
+                "",
+                "jO6sB1JjIbyQVKkooyUsJrou4tx38pF8al656WmYkDg=",
+                "your-fernet-encryption-key-here",
+            }
+            if not self.TOKEN_ENCRYPTION_KEY or self.TOKEN_ENCRYPTION_KEY in insecure_token_defaults:
+                raise RuntimeError(
+                    "Startup refused in production: TOKEN_ENCRYPTION_KEY is missing or using an insecure default. "
+                    "Generate a valid 32-byte Fernet key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+                )
+            try:
+                from cryptography.fernet import Fernet
+                Fernet(self.TOKEN_ENCRYPTION_KEY.encode())
+            except Exception as e:
+                raise RuntimeError(
+                    f"Startup refused in production: TOKEN_ENCRYPTION_KEY is not a valid 32-byte Fernet key: {e}"
+                )
+
         return self
 
     model_config = SettingsConfigDict(

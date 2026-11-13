@@ -13,7 +13,13 @@
 
 ---
 
-## 🛠️ Prerequisites & Local HTTPS Tunnel (Cloudflare)
+## 🛠️ Prerequisites, Environment Modes & Local HTTPS Tunnel
+
+> [!WARNING] Fail-Closed Environment Configuration: Local Development Requires `ENVIRONMENT=development`
+> DebtScope operates under a strict **fail-closed** architecture:
+> - By default, the application runs in `ENVIRONMENT=production`.
+> - In `production`, startup **refuses to run** (`RuntimeError`) if `SECRET_KEY`, `JWT_SECRET`, or `TOKEN_ENCRYPTION_KEY` are unset, empty, or left as default placeholders, or if any sandbox/simulation flags are enabled.
+> - **For local engineering and testing**, you MUST explicitly specify `ENVIRONMENT=development` in your local `.env` file. This permits local sandbox auth, mock services, and dev convenience defaults.
 
 OAuth providers (especially Google and Atlassian) require public HTTPS endpoints or strict localhost URIs for OAuth callbacks. For local development on Windows, we use the pre-staged `cloudflared.exe` located in the repository root.
 

@@ -678,6 +678,49 @@ When business integrations (Jira, Notion) are not connected and simulation is di
   - Since business impact accounts for $0.25 / 0.80 = 31.25\%$ of the renormalized baseline score, a matching path heuristic contributes an automatic $+9.92$ points to the file's overall priority score.
   - As a result, the default path heuristic **directly drives ranking**, elevating `core` or `auth` files into `CRITICAL` or `STRATEGIC_REFACTOR` categories even with zero live business integrations configured.
 
+---
+
+## 17. Amendment D: Fail-Closed Production Startup Refusal on Default Secrets
+
+### 17.1 Security Policy Enforcement
+In `backend/config.py`, the `@model_validator(mode="after")` `_check_sandbox_production` was enhanced to enforce fail-closed cryptographic hygiene:
+1. **`SECRET_KEY` Validation**: If `ENVIRONMENT == "production"` and `SECRET_KEY` is empty, unset, or equal to known default values (`super-secret-key-change-in-production-2026`, `change-me...`), startup immediately terminates with a `RuntimeError`.
+2. **`JWT_SECRET` Validation**: If `ENVIRONMENT == "production"` and `JWT_SECRET` is default or empty, startup terminates with `RuntimeError`.
+3. **`TOKEN_ENCRYPTION_KEY` Validation**: In `production`, `TOKEN_ENCRYPTION_KEY` cannot be empty or a default placeholder (`jO6sB1JjIbyQVKkooyUsJrou4tx38pF8al656WmYkDg=`). It must be a valid 32-byte Fernet key decryptable by `cryptography.fernet.Fernet`.
+4. **Local Dev Explicit Requirement**: Local development now explicitly requires `ENVIRONMENT=development` in `.env` to permit local convenience defaults and simulation fixtures. Documentation and examples updated in `.env.example` and `docs/MANUAL_STEPS.md`.
+
+### 17.2 Evidence & Test Output
+Command run: `py -m pytest backend/tests/test_multi_tenancy.py -k "production or sandbox" -v`
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\dhruv\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collecting ... collected 31 items / 20 deselected / 11 selected
+
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_sandbox_auth_raises_in_production PASSED [  9%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_jira_simulation_raises_in_production PASSED [ 18%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_notion_simulation_raises_in_production PASSED [ 27%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_production_mode_allowed_when_all_simulations_false PASSED [ 36%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_production_refuses_default_session_secret PASSED [ 45%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_production_refuses_default_jwt_secret PASSED [ 54%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_production_refuses_missing_or_invalid_fernet_key PASSED [ 63%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_sandbox_auth_allowed_in_development PASSED [ 72%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_empty_env_refuses_sandbox_auth PASSED [ 81%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_five_weights_sum_to_one PASSED [ 90%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_effort_blend_is_separate_from_five_weights PASSED [100%]
+
+============================== warnings summary ===============================
+..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\dhruv\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================ 11 passed, 20 deselected, 1 warning in 0.24s =================
+```
+
+
 
 
 

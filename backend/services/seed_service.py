@@ -432,6 +432,7 @@ def seed_database(db: Session, include_benchmark: bool = False) -> None:
             maintenance_cost=b["maintenance_cost"],
             estimated_remediation_effort=b["estimated_remediation_effort"],
             domain_tag=b["domain_tag"],
+            provenance=b.get("provenance", "INTEGRATION"),
             workspace_id=DEMO_WORKSPACE_ID,
         )
         db.add(bctx_obj)

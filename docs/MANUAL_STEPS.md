@@ -1,6 +1,15 @@
 # DebtScope Manual Steps & External Credentials Guide
 
-This guide contains the exact steps, console URLs, required form fields, redirect URIs, and `.env` configuration keys required from the project owner to connect live third-party services.
+> [!IMPORTANT] Active Status: External Credentials Still Missing Prior to Live Production Launch
+> As planned, the platform is currently operating in verified sandbox/simulation modes (`DEV_SANDBOX_AUTH=True`, `JIRA_SIMULATION_MODE=True`, `NOTION_SIMULATION_MODE=True`, `DeterministicMockCopilotAdapter`). The following credentials must be populated before enabling live production operations:
+>
+> | Integration | Required Environment Variables | Status | Pending Owner Action |
+> | :--- | :--- | :---: | :--- |
+> | **GitHub Access** | `GITHUB_TOKEN` (Personal Token) OR `GITHUB_APP_ID`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_PRIVATE_KEY_PATH` | ⏳ PENDING | Teammate manual generation (needed for private repository scanning and higher rate limits) |
+> | **Google OAuth 2.0** | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | ⏳ PENDING | Google Cloud Console project OAuth Client ID creation |
+> | **Atlassian Jira Cloud** | `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET`, `JIRA_REDIRECT_URI` | ⏳ PENDING | Atlassian Developer Console 3LO app creation |
+> | **Notion Integration** | `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` (or `NOTION_API_KEY`) | ⏳ PENDING | Notion Developer Portal integration creation |
+> | **AI Copilot LLM** | `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`), `COPILOT_LLM_PROVIDER` | ⏳ PENDING | Google AI Studio or Anthropic Console API key generation |
 
 ---
 

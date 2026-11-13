@@ -289,3 +289,25 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 pass
     finally:
         db.close()
+
+
+def recover_stale_jobs(db: Session) -> int:
+    """
+    Finds in-flight jobs (QUEUED, CLONING, ANALYZING, MINING) left behind after a process crash/restart
+    and marks them as FAILED with an informative message.
+    Returns the count of recovered stale jobs.
+    """
+    stale_jobs = db.query(AnalysisJob).filter(
+        AnalysisJob.status.in_(["QUEUED", "CLONING", "ANALYZING", "MINING"])
+    ).all()
+    count = len(stale_jobs)
+    for j in stale_jobs:
+        j.status = "FAILED"
+        j.stage = "Analysis interrupted by server restart."
+        j.error_message = "Analysis job interrupted by server restart. Please re-trigger analysis."
+        j.completed_at = utc_now()
+    if count > 0:
+        db.commit()
+        logger.warning("Recovered %d stale in-flight analysis jobs on startup.", count)
+    return count
+

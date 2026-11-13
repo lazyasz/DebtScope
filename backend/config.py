@@ -13,7 +13,7 @@ Stage-6 Effort Blend (separate post-processing step, NOT a 6th weight):
   w_E  = 0.15  → adjusts PS_base → PS_final; does NOT enter the 5D formula
 """
 
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, model_validator
 
@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # Session cookie
     SESSION_COOKIE_NAME: str = "debtscope_session"
     SESSION_MAX_AGE_SECONDS: int = 28800  # 8 hours
+    COOKIE_SECURE: Optional[bool] = None  # None -> auto-detect (True in production, False in dev)
+    COOKIE_SAMESITE: str = "lax"
 
     # Token encryption for integration OAuth tokens at rest (Fernet key, base64url)
     # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

@@ -83,3 +83,77 @@ class TestAnalysisJobEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
+
+    def test_recover_stale_jobs_on_restart(self):
+        """
+        Verifies that recover_stale_jobs identifies in-flight jobs (QUEUED, CLONING, ANALYZING, MINING)
+        and transitions them to FAILED with a clear restart notice, leaving finished jobs intact.
+        """
+        from backend.services.analysis_worker import recover_stale_jobs
+        db = SessionLocal()
+        try:
+            # Create in-flight jobs
+            j_queued = AnalysisJob(id="job_stale_queued", workspace_id="ws_demo", repo_url="https://github.com/test/repo1", status="QUEUED")
+            j_analyzing = AnalysisJob(id="job_stale_analyzing", workspace_id="ws_demo", repo_url="https://github.com/test/repo2", status="ANALYZING")
+            j_mining = AnalysisJob(id="job_stale_mining", workspace_id="ws_demo", repo_url="https://github.com/test/repo3", status="MINING")
+            j_completed = AnalysisJob(id="job_stale_completed", workspace_id="ws_demo", repo_url="https://github.com/test/repo4", status="COMPLETED")
+            db.merge(j_queued)
+            db.merge(j_analyzing)
+            db.merge(j_mining)
+            db.merge(j_completed)
+            db.commit()
+
+            recovered_count = recover_stale_jobs(db)
+            assert recovered_count >= 3
+
+            # Check statuses
+            assert db.query(AnalysisJob).filter(AnalysisJob.id == "job_stale_queued").first().status == "FAILED"
+            assert db.query(AnalysisJob).filter(AnalysisJob.id == "job_stale_analyzing").first().status == "FAILED"
+            assert db.query(AnalysisJob).filter(AnalysisJob.id == "job_stale_mining").first().status == "FAILED"
+            # Completed job must remain COMPLETED
+            assert db.query(AnalysisJob).filter(AnalysisJob.id == "job_stale_completed").first().status == "COMPLETED"
+
+            # Check error message
+            q_job = db.query(AnalysisJob).filter(AnalysisJob.id == "job_stale_queued").first()
+            assert "interrupted by server restart" in q_job.error_message
+        finally:
+            db.close()
+
+    def test_cookie_secure_samesite_behavior(self):
+        """Verifies session cookie security behavior across environments and behind Nginx."""
+        from backend.api.auth_routes import _is_cookie_secure, _set_session_cookie
+        from backend.config import settings
+        from fastapi import Response
+
+        # In current test env
+        orig_secure = settings.COOKIE_SECURE
+        orig_env = settings.ENVIRONMENT
+        try:
+            # 1. Dev default: secure is False
+            settings.COOKIE_SECURE = None
+            settings.ENVIRONMENT = "development"
+            assert _is_cookie_secure() is False
+
+            # 2. Production default: secure is True
+            settings.COOKIE_SECURE = None
+            settings.ENVIRONMENT = "production"
+            assert _is_cookie_secure() is True
+
+            # 3. Explicit override
+            settings.COOKIE_SECURE = True
+            assert _is_cookie_secure() is True
+            settings.COOKIE_SECURE = False
+            assert _is_cookie_secure() is False
+
+            # 4. Check Set-Cookie headers in Response
+            res = Response()
+            settings.COOKIE_SECURE = True
+            _set_session_cookie(res, "test_jwt_value")
+            cookie_header = res.headers.get("set-cookie", "")
+            assert "Secure" in cookie_header
+            assert "SameSite=lax" in cookie_header or "samesite=lax" in cookie_header
+            assert "HttpOnly" in cookie_header or "httponly" in cookie_header
+        finally:
+            settings.COOKIE_SECURE = orig_secure
+            settings.ENVIRONMENT = orig_env
+

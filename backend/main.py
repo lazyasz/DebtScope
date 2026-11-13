@@ -45,6 +45,9 @@ async def lifespan(app: FastAPI):
     try:
         ensure_demo_workspace(db)
         seed_database(db)
+        # 4. Recover any stale in-flight jobs left behind by previous process restart
+        from backend.services.analysis_worker import recover_stale_jobs
+        recover_stale_jobs(db)
     finally:
         db.close()
 

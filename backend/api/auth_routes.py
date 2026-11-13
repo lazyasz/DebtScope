@@ -48,13 +48,19 @@ router = APIRouter(prefix="/auth", tags=["Authentication & RBAC"])
 # Cookie helper
 # ---------------------------------------------------------------------------
 
+def _is_cookie_secure() -> bool:
+    if settings.COOKIE_SECURE is not None:
+        return settings.COOKIE_SECURE
+    return settings.ENVIRONMENT.lower() == "production"
+
+
 def _set_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=False,       # set True in production (HTTPS)
-        samesite="lax",
+        secure=_is_cookie_secure(),
+        samesite=settings.COOKIE_SAMESITE,
         max_age=settings.SESSION_MAX_AGE_SECONDS,
         path="/",
     )
@@ -64,7 +70,7 @@ def _clear_session_cookie(response: Response) -> None:
     response.delete_cookie(
         key=settings.SESSION_COOKIE_NAME,
         path="/",
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
     )
 
 
@@ -101,8 +107,8 @@ def google_oauth_login(db: Session = Depends(get_db)):
         key="oauth_state",
         value=state,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=_is_cookie_secure(),
+        samesite=settings.COOKIE_SAMESITE,
         max_age=600,  # 10 minutes
         path="/",
     )

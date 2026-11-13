@@ -131,4 +131,4 @@ def test_file_detail_response_includes_model_labels(db_session):
     assert detail.is_experimental is True
     assert detail.confidence_score <= 0.70
     assert detail.model_calibration_status == "uncalibrated_heuristic"
-    assert "Defect Probability" in detail.defect_probability_label
+    assert detail.defect_probability_label == "relative defect risk (uncalibrated)"

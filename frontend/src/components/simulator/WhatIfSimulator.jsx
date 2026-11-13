@@ -540,7 +540,7 @@ export default function WhatIfSimulator({ initialModule, onOpenRecipe }) {
                   Multi-Sprint Trajectory Projection (Sprints 1-6)
                 </h3>
                 <p className="text-xs text-[#525866]">
-                  Real-time curves for predicted debt reduction, defect probability drop, and velocity recovery
+                  Real-time curves for predicted debt reduction, relative defect risk drop, and velocity recovery
                 </p>
               </div>
 

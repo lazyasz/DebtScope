@@ -244,8 +244,8 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
 
             text = (
                 f"📈 **What-If Simulation for [file:{target}]**:\n\n"
-                f"- **Baseline**: Baseline Defect Probability is `{base_data.get('defect_probability_pct', 45.0)}%` (Current Complexity: {base_data.get('current_complexity', 18)})\n"
-                f"- **Simulated Defect Probability**: `simulated_defect_probability_pct` = **{sim_data.get('simulated_defect_probability_pct', 22.0)}%**\n"
+                f"- **Baseline**: Baseline Relative Defect Risk (uncalibrated) is `{base_data.get('defect_probability_pct', 45.0)}%` (Current Complexity: {base_data.get('current_complexity', 18)})\n"
+                f"- **Simulated Relative Defect Risk**: `simulated_defect_probability_pct` = **{sim_data.get('simulated_defect_probability_pct', 22.0)}%**\n"
                 f"- **Defect Risk Reduction**: `risk_reduction_pct` = **{sim_data.get('risk_reduction_pct', 23.0)}%** drop in defect_probability\n"
                 f"- **Engineering Hours Saved**: `estimated_hours_saved` = **{sim_data.get('estimated_hours_saved', 18.5)} hours_saved**\n"
                 f"- **Projected Financial ROI**: `projected_roi_usd` = **${roi_val:,.0f}** projected_roi\n\n"

@@ -120,7 +120,7 @@ export default function Dashboard() {
             </h1>
             
             <p className="text-xs sm:text-sm text-[#525866] leading-relaxed">
-              Real-time algorithmic triage linking software telemetry, AST cyclomatic depth, Random Forest defect models (<span className="font-mono font-semibold text-[#5b42a5]">R² = 0.9885</span>), and business ROI prioritization.
+              Real-time algorithmic triage linking software telemetry, AST cyclomatic depth, Random Forest defect models (Relative Defect Risk), and business ROI prioritization.
             </p>
 
             {/* Action Button Hierarchy: 1 Primary + 3 Secondary */}
@@ -251,7 +251,7 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">
-                Defect Probability
+                Relative Defect Risk (Uncalibrated)
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
                 <AnimatedCounter value={38.5} decimals={1} />% <span className="text-xs font-normal text-[#525866] font-sans">Exposure</span>
@@ -264,7 +264,7 @@ export default function Dashboard() {
           <div className="pt-3.5 flex items-center justify-between border-t border-[#e2e4ea] text-xs">
             <span className="text-[#b45309] text-[11px] font-medium">Random Forest Regressor</span>
             <span className="text-[11px] font-mono font-semibold text-[#b45309] group-hover:translate-x-0.5 transition flex items-center gap-1">
-              <span>R² = 0.9885</span>
+              <span>Relative SZZ Risk</span>
               <ChevronRight className="w-3 h-3" />
             </span>
           </div>

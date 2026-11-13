@@ -216,7 +216,7 @@ def format_jira_description(data: Dict[str, Any]) -> str:
     business_impact = data.get("business_impact", 0.0)
     effort = data.get("remediation_effort_hours", 0.0)
     quadrant = data.get("roi_quadrant", "Strategic Refactoring")
-    explanation = data.get("explanation", "High technical risk and defect probability requires refactoring.")
+    explanation = data.get("explanation", "High technical risk and relative defect risk requires refactoring.")
 
     return f"""h2. 🏎️ Predictive Engineering Intelligence — Technical Debt Report
 *Target Component:* `{component}`
@@ -224,7 +224,7 @@ def format_jira_description(data: Dict[str, Any]) -> str:
 *5D Priority Score:* *{score:.1f}/100*
 
 h3. 📊 Predictive & Business Metrics
-* *ML Defect Probability:* `{defect_prob * 100:.1f}%`
+* *ML Relative Defect Risk:* `{defect_prob * 100:.1f}%` (Uncalibrated)
 * *Future Technical Risk:* `{risk_score:.1f}/100`
 * *Business Impact Weight:* `{business_impact:.1f}/100`
 * *Remediation Effort:* `{effort:.1f} Hours` (~{_estimate_story_points(effort)} Story Points)

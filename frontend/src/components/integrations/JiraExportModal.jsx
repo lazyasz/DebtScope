@@ -181,7 +181,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                     className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl focus:ring-2 focus:ring-[#43562b]"
                   >
                     <option value="Task">Task (Tech Debt Refactoring)</option>
-                    <option value="Bug">Bug (High Defect Probability)</option>
+                    <option value="Bug">Bug (High Relative Defect Risk)</option>
                     <option value="Story">Story (Architectural Decoupling)</option>
                   </select>
                 </div>

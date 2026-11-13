@@ -53,7 +53,7 @@ export default function AppLayout() {
               </div>
               <span className="text-[#88909e]">·</span>
               <span className="font-mono text-[11px] text-[#525866]">
-                ISO/IEC 25010 & SZZ Defect Engine (R² = 0.9885)
+                ISO/IEC 25010 & SZZ Defect Engine (Relative Defect Risk)
               </span>
               <span className="text-[#88909e] hidden sm:inline">·</span>
               <div className="flex items-center gap-1.5 text-[11px] text-[#059669]">

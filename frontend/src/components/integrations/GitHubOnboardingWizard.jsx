@@ -91,7 +91,7 @@ export default function GitHubOnboardingWizard({ isOpen, onClose, onComplete, in
 
     setTimeout(() => {
       setScanProgress(75);
-      setScanPhase('Running SZZ Defect Regressor (R² = 0.9885)...');
+      setScanPhase('Running SZZ Defect Regressor (Relative Defect Risk)...');
     }, 1600);
 
     setTimeout(async () => {

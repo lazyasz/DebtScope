@@ -143,7 +143,7 @@ export default function Predictions() {
 
         <div className="flex items-center gap-2 px-3.5 py-2 bg-[#e8f1db] rounded-2xl border border-[#c5c8ba] shadow-2xs whitespace-nowrap ml-auto">
           <CheckCircle2 className="w-3.5 h-3.5 text-[#43562b]" />
-          <span className="text-[#2d3f16] font-bold">R² Fit: 0.9885 (High Confidence)</span>
+          <span className="text-[#2d3f16] font-bold">Relative Defect Risk (Uncalibrated)</span>
         </div>
       </section>
 
@@ -170,7 +170,7 @@ export default function Predictions() {
           </div>
           <div className="pt-3 flex items-center justify-between z-10 text-xs border-t border-white/10">
             <span className="text-[#d3ebb2] font-mono">14 Modules Exposed</span>
-            <span className="font-mono font-bold text-white">R² = 0.9885 Fit</span>
+            <span className="font-mono font-bold text-white">Relative SZZ Risk</span>
           </div>
         </InteractiveCard>
 
@@ -271,7 +271,7 @@ export default function Predictions() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-lg font-bold text-[#161e10]">Live Defect Risk Simulator</h2>
-              <p className="text-xs text-[#45483e]">Adjust AST telemetry parameters to calculate live forecasted defect probability</p>
+              <p className="text-xs text-[#45483e]">Adjust AST telemetry parameters to calculate live forecasted relative defect risk (uncalibrated)</p>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#e8f1db] text-[#2d3f16]">
               Real-Time Inference

@@ -85,3 +85,30 @@ High Effort          │          Low Effort
                      │
            Low Value (PS_base < 60)
 ```
+
+---
+
+## 5. Technical-Only Scoring & Path Heuristic Ranking Impact
+
+When business integrations (Jira, Notion) are not configured and simulation flags are disabled:
+
+1. **Renormalization vs Labeling**:
+   - Missing dimensions (such as `release_urgency`, which requires connected Jira sprint/release data) are omitted from the active dimension set ($w_{U} = 0$).
+   - The remaining active weights ($w_{TR}=0.35, w_{BI}=0.25, w_{M}=0.10, w_{A}=0.10$) are dynamically renormalized so they sum to 1.00 ($w'_i = w_i / \sum_{\text{active}} w$).
+   - The resulting score is explicitly **labeled** in the API and UI as:
+     `"{N} of 5 dimensions — technical-only (business context not configured)"`.
+
+2. **Path Heuristic Ranking Impact**:
+   - The business impact dimension ($BI_{comp}$) is **not zeroed out**; it operates under built-in defaults or path heuristics.
+   - Files matching core path tokens (`auth`, `core`, `api`, `pay`, `order`) are assigned `DEFAULT_RULE` provenance:
+     - `business_criticality = 90.0`
+     - `customer_impact = 85.0`
+     - `module_criticality = 85.0`
+     $\implies BI_{comp} = (0.50 \times 90) + (0.35 \times 85) + (0.15 \times 85) = 87.50$
+   - Standard non-core files receive `DEFAULT` provenance:
+     - `business_criticality = 60.0`
+     - `customer_impact = 50.0`
+     - `module_criticality = 55.0`
+     $\implies BI_{comp} = (0.50 \times 60) + (0.35 \times 50) + (0.15 \times 55) = 55.75$
+   - **Ranking Consequence**: Files in `core/` or `auth/` receive a **+31.75 point advantage** in business impact, which accounts for ~31.25% of the renormalized baseline score. As a result, path-heuristic matching directly determines top-10 ranking and can elevate a file into `CRITICAL` or `STRATEGIC_REFACTOR` even when no Jira or user business rules are configured.
+

@@ -648,6 +648,37 @@ backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResis
 ======================== 15 passed, 1 warning in 0.94s ========================
 ```
 
+---
+
+## 16. Amendment C: Technical-Only Scoring & Path Heuristic Ranking Clarification
+
+### 16.1 Renormalization vs Labeling Status
+When business integrations (Jira, Notion) are not connected and simulation is disabled:
+- **Renormalization Status**: **Partially Renormalized**.
+  - Any dimension whose underlying data cannot be derived (specifically `release_urgency`, which requires connected Jira sprints/releases) is completely dropped from the active dimension set ($w_U = 0$).
+  - The remaining available dimensions ($w_{TR}=0.35, w_{BI}=0.25, w_{M}=0.10, w_{A}=0.10 \implies \sum=0.80$) are dynamically renormalized to sum to 1.00 ($w'_i = w_i / 0.80$).
+- **Labeling Status**: **Explicitly Labeled**.
+  - The API and UI explicitly tag the coverage text:
+    `"{count} of 5 dimensions — technical-only (business context not configured)"`.
+
+### 16.2 Default Path Heuristic Impact on Ranking
+- The `business_impact` dimension is **not excluded** when Jira is absent; it falls back to built-in path heuristics:
+  - Files whose file path contains `auth`, `core`, `api`, `pay`, or `order` are classified as `DEFAULT_RULE`:
+    - `business_criticality = 90.0`
+    - `customer_impact = 85.0`
+    - `module_criticality = 85.0`
+    $\implies BI_{comp} = 87.50$
+  - Standard files are classified as `DEFAULT`:
+    - `business_criticality = 60.0`
+    - `customer_impact = 50.0`
+    - `module_criticality = 55.0`
+    $\implies BI_{comp} = 55.75$
+- **Net Effect**:
+  - The path heuristic gives matching files a **+31.75 point advantage** in business impact.
+  - Since business impact accounts for $0.25 / 0.80 = 31.25\%$ of the renormalized baseline score, a matching path heuristic contributes an automatic $+9.92$ points to the file's overall priority score.
+  - As a result, the default path heuristic **directly drives ranking**, elevating `core` or `auth` files into `CRITICAL` or `STRATEGIC_REFACTOR` categories even with zero live business integrations configured.
+
+
 
 
 

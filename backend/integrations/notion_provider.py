@@ -77,6 +77,8 @@ class NotionProvider(IntegrationProvider):
     async def exchange_code(self, code: str, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges authorization code for Notion Workspace token."""
         if not self.is_live_configured() or code.startswith("notion_mock"):
+            if not settings.NOTION_SIMULATION_MODE:
+                raise RuntimeError("Notion live credentials not configured and NOTION_SIMULATION_MODE is disabled.")
             return {
                 "access_token": "secret_notion_sandbox_mock_token_7781263",
                 "workspace_id": "ws_notion_debtscope_core",

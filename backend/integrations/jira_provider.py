@@ -134,6 +134,8 @@ class JiraProvider(IntegrationProvider):
     async def exchange_code(self, code: str, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges authorization code for Atlassian Cloud access tokens."""
         if not self.is_live_configured() or code.startswith("jira_mock"):
+            if not settings.JIRA_SIMULATION_MODE:
+                raise RuntimeError("Jira live credentials not configured and JIRA_SIMULATION_MODE is disabled.")
             return {
                 "access_token": "jira_sandbox_mock_token_88921827491",
                 "refresh_token": "jira_mock_refresh_token_99182371",

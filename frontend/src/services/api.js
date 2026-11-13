@@ -3,11 +3,10 @@
  *
  * Centralized service for communication between React UI and FastAPI backend.
  * Connects to live FastAPI backend at http://localhost:8000.
- * Automatically falls back to mockApi.js if the backend is unreachable.
+ * Strict error propagation: no silent mock fallbacks.
  */
 
 import axios from 'axios';
-import * as mockApi from './mockApi';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || '';
@@ -23,8 +22,6 @@ export const USE_REAL_API = true;
 
 /**
  * Checks if the current session is operating in the seeded demo / sandbox workspace.
- * When false, silent mock fallbacks are completely eliminated so tenant users
- * receive genuine HTTP/network errors.
  */
 export function isDemoWorkspace() {
   const ws = localStorage.getItem('debtscope_workspace') || sessionStorage.getItem('debtscope_workspace');
@@ -32,108 +29,38 @@ export function isDemoWorkspace() {
 }
 
 export async function getMetrics() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getMetrics();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/metrics');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/metrics failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getMetrics();
-  }
+  const { data } = await apiClient.get('/api/metrics');
+  return data;
 }
 
 export async function getTechnicalDebt() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getTechnicalDebt();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/technical-debt');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/technical-debt failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getTechnicalDebt();
-  }
+  const { data } = await apiClient.get('/api/technical-debt');
+  return data;
 }
 
 export async function getPredictions() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getPredictions();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/predictions');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/predictions failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getPredictions();
-  }
+  const { data } = await apiClient.get('/api/predictions');
+  return data;
 }
 
 export async function getHotspots() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getHotspots();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/hotspots');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/hotspots failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getHotspots();
-  }
+  const { data } = await apiClient.get('/api/hotspots');
+  return data;
 }
 
 export async function getPriorities() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getPriorities();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/priorities');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/priorities failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getPriorities();
-  }
+  const { data } = await apiClient.get('/api/priorities');
+  return data;
 }
 
 export async function getRecommendations() {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getRecommendations();
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get('/api/recommendations');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/recommendations failed, falling back to mock data (demo mode):', err.message);
-    return mockApi.getRecommendations();
-  }
+  const { data } = await apiClient.get('/api/recommendations');
+  return data;
 }
 
 export async function getFile(id) {
-  if (!USE_REAL_API) {
-    if (isDemoWorkspace()) return mockApi.getFile(id);
-    throw new Error('Real API disabled but operating outside demo workspace.');
-  }
-  try {
-    const { data } = await apiClient.get(`/api/files/${id}`);
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn(`[API] /api/files/${id} failed, falling back to mock data (demo mode):`, err.message);
-    return mockApi.getFile(id);
-  }
+  const { data } = await apiClient.get(`/api/files/${id}`);
+  return data;
 }
 
 export async function scanRepository(url) {
@@ -160,40 +87,16 @@ export async function listJobs() {
 // Authentication & RBAC APIs
 // -------------------------------------------------------------
 export async function getAuthMe() {
-  try {
-    const { data } = await apiClient.get('/api/auth/me');
-    if (data?.workspace_id) {
-      localStorage.setItem('debtscope_workspace', data.workspace_id);
-    }
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/auth/me failed (demo mode):', err.message);
-    return {
-      status: 'authenticated',
-      user: {
-        id: 'usr_lead_01',
-        name: 'Dhruv Patel',
-        email: 'dhruv.lead@engineering.org',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-        role: 'Lead Architect',
-        role_code: 'lead_architect',
-        permissions: ['prioritize', 'export_jira', 'sync_notion', 'override_weights', 'manage_integrations'],
-        team: 'Core Platform & Architecture'
-      },
-      workspace_id: 'ws_demo'
-    };
+  const { data } = await apiClient.get('/api/auth/me');
+  if (data?.workspace_id) {
+    localStorage.setItem('debtscope_workspace', data.workspace_id);
   }
+  return data;
 }
 
 export async function getDemoProfiles() {
-  try {
-    const { data } = await apiClient.get('/api/auth/profiles');
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    return { profiles: {}, active_profile: {} };
-  }
+  const { data } = await apiClient.get('/api/auth/profiles');
+  return data;
 }
 
 export async function loginWithGoogle(credential) {

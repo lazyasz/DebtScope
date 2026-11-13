@@ -187,6 +187,11 @@ def get_me(
                         "permissions": payload.get("permissions", ["prioritize", "export_jira", "sync_notion", "override_weights", "manage_integrations"]),
                     },
                     "sandbox_mode": payload.get("sandbox", sandbox_mode),
+                    "active_simulations": {
+                        "auth": settings.DEV_SANDBOX_AUTH,
+                        "jira": settings.JIRA_SIMULATION_MODE,
+                        "notion": settings.NOTION_SIMULATION_MODE,
+                    },
                     "workspace_id": ws.id if ws else "ws_demo",
                 }
 
@@ -208,6 +213,11 @@ def get_me(
                     "permissions": demo.get("permissions", ["prioritize", "export_jira", "sync_notion", "override_weights", "manage_integrations"]),
                 },
                 "sandbox_mode": True,
+                "active_simulations": {
+                    "auth": settings.DEV_SANDBOX_AUTH,
+                    "jira": settings.JIRA_SIMULATION_MODE,
+                    "notion": settings.NOTION_SIMULATION_MODE,
+                },
                 "workspace_id": ws.id if ws else "ws_demo",
             },
             headers={"Set-Cookie": (

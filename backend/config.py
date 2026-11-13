@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str = ""
 
     # Integrations: Atlassian Jira Cloud (OAuth 2.0 3LO & REST API)
+    JIRA_SIMULATION_MODE: bool = True  # Explicit flag; must be False in production
     JIRA_CLIENT_ID: str = ""
     JIRA_CLIENT_SECRET: str = ""
     JIRA_REDIRECT_URI: str = "http://localhost:5173/auth/jira/callback"
@@ -98,6 +99,7 @@ class Settings(BaseSettings):
     JIRA_PROJECT_KEY: str = "DEBT"
 
     # Integrations: Notion (OAuth 2.0 & REST API v1)
+    NOTION_SIMULATION_MODE: bool = True  # Explicit flag; must be False in production
     NOTION_CLIENT_ID: str = ""
     NOTION_CLIENT_SECRET: str = ""
     NOTION_REDIRECT_URI: str = "http://localhost:5173/auth/notion/callback"
@@ -112,12 +114,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_sandbox_production(self) -> "Settings":
-        """Refuse to start with sandbox auth in production."""
-        if self.DEV_SANDBOX_AUTH and self.ENVIRONMENT == "production":
-            raise RuntimeError(
-                "DEV_SANDBOX_AUTH=True is not allowed when ENVIRONMENT=production. "
-                "Set DEV_SANDBOX_AUTH=False in your production .env file."
-            )
+        """Refuse to start with sandbox/simulated modes in production."""
+        if self.ENVIRONMENT == "production":
+            if self.DEV_SANDBOX_AUTH:
+                raise RuntimeError(
+                    "DEV_SANDBOX_AUTH=True is not allowed when ENVIRONMENT=production. "
+                    "Set DEV_SANDBOX_AUTH=False in your production .env file."
+                )
+            if self.JIRA_SIMULATION_MODE:
+                raise RuntimeError(
+                    "JIRA_SIMULATION_MODE=True is not allowed when ENVIRONMENT=production. "
+                    "Set JIRA_SIMULATION_MODE=False and configure live Jira credentials in production."
+                )
+            if self.NOTION_SIMULATION_MODE:
+                raise RuntimeError(
+                    "NOTION_SIMULATION_MODE=True is not allowed when ENVIRONMENT=production. "
+                    "Set NOTION_SIMULATION_MODE=False and configure live Notion credentials in production."
+                )
         return self
 
     model_config = SettingsConfigDict(

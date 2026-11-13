@@ -168,6 +168,50 @@ class TestDEVSandboxAuth:
                 JWT_SECRET="x",
             )
 
+    def test_jira_simulation_raises_in_production(self):
+        """Settings(JIRA_SIMULATION_MODE=True, ENVIRONMENT=production) must raise."""
+        from backend.config import Settings
+        with pytest.raises(RuntimeError) as exc_info:
+            Settings(
+                DEV_SANDBOX_AUTH=False,
+                JIRA_SIMULATION_MODE=True,
+                NOTION_SIMULATION_MODE=False,
+                ENVIRONMENT="production",
+                SECRET_KEY="x",
+                JWT_SECRET="x",
+            )
+        assert "JIRA_SIMULATION_MODE=True is not allowed" in str(exc_info.value)
+
+    def test_notion_simulation_raises_in_production(self):
+        """Settings(NOTION_SIMULATION_MODE=True, ENVIRONMENT=production) must raise."""
+        from backend.config import Settings
+        with pytest.raises(RuntimeError) as exc_info:
+            Settings(
+                DEV_SANDBOX_AUTH=False,
+                JIRA_SIMULATION_MODE=False,
+                NOTION_SIMULATION_MODE=True,
+                ENVIRONMENT="production",
+                SECRET_KEY="x",
+                JWT_SECRET="x",
+            )
+        assert "NOTION_SIMULATION_MODE=True is not allowed" in str(exc_info.value)
+
+    def test_production_mode_allowed_when_all_simulations_false(self):
+        """When all simulation flags are False, production environment instantiates cleanly."""
+        from backend.config import Settings
+        s = Settings(
+            DEV_SANDBOX_AUTH=False,
+            JIRA_SIMULATION_MODE=False,
+            NOTION_SIMULATION_MODE=False,
+            ENVIRONMENT="production",
+            SECRET_KEY="x",
+            JWT_SECRET="x",
+        )
+        assert s.ENVIRONMENT == "production"
+        assert s.DEV_SANDBOX_AUTH is False
+        assert s.JIRA_SIMULATION_MODE is False
+        assert s.NOTION_SIMULATION_MODE is False
+
     def test_sandbox_auth_allowed_in_development(self):
         """DEV_SANDBOX_AUTH=True + ENVIRONMENT=development must NOT raise."""
         from backend.config import Settings

@@ -15,14 +15,51 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 
-JIRA_KEY_REGEX = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
+DISALLOWED_KEY_PREFIXES = {
+    "CVE", "SHA", "MD5", "UTF", "RFC", "ISO", "IEEE", "HTTP", "HTTPS", "W3C",
+    "UUID", "ECMA", "POSIX", "ANSI", "NIST", "FIPS", "SSL", "TLS", "TCP", "UDP"
+}
+
+JIRA_KEY_REGEX = re.compile(r'\b([A-Z][A-Z0-9]{1,9}-\d+)\b')
 
 
-def parse_jira_keys_from_commit(message: str) -> List[str]:
-    """Extracts Jira issue keys like 'DEBT-101', 'PAY-42' from commit text."""
+def parse_jira_keys_from_commit(
+    message: str,
+    allowed_project_keys: Optional[Set[str]] = None
+) -> List[str]:
+    """
+    Extracts valid Jira issue keys from commit text.
+    Rejects non-ASCII/UTF-8 patterns, SHA-256, CVE-..., RFC-..., etc.
+    Validates against connected site's project keys when provided.
+    """
     if not message:
         return []
-    return JIRA_KEY_REGEX.findall(message)
+
+    # Filter out any non-ASCII characters to prevent UTF-8 homoglyph exploits
+    clean_message = "".join(c for c in message if ord(c) < 128)
+    raw_keys = JIRA_KEY_REGEX.findall(clean_message)
+    valid_keys = []
+    seen = set()
+
+    for k in raw_keys:
+        prefix, _ = k.split("-", 1)
+        prefix_upper = prefix.upper()
+        # 1. Reject disallowed false-positive prefixes (CVE, SHA, UTF, RFC, etc.)
+        if prefix_upper in DISALLOWED_KEY_PREFIXES:
+            continue
+        # 2. Reject invalid prefix lengths (standard Jira project keys are 2-10 characters)
+        if len(prefix_upper) < 2 or len(prefix_upper) > 10:
+            continue
+        # 3. If connected site project keys provided, validate membership
+        if allowed_project_keys is not None:
+            allowed_set = {pk.upper() for pk in allowed_project_keys}
+            if prefix_upper not in allowed_set:
+                continue
+        if k not in seen:
+            seen.add(k)
+            valid_keys.append(k)
+
+    return valid_keys
 
 
 def derive_jira_business_signals(issues: List[Dict[str, Any]]) -> Dict[str, Any]:

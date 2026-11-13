@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Patterns matching bug-fixing commits (SZZ heuristic foundation)
 BUG_FIX_KEYWORDS = ("fix", "bug", "patch", "issue", "resolve", "defect", "error", "crash")
-JIRA_KEY_REGEX = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
+from backend.services.jira_service import parse_jira_keys_from_commit
 
 
 class GitMiner:
@@ -108,7 +108,7 @@ class GitMiner:
                     raw_subject = parts[4].strip()
                     subject_lower = raw_subject.lower()
                     current_is_fix = any(k in subject_lower for k in BUG_FIX_KEYWORDS)
-                    current_jira_keys = JIRA_KEY_REGEX.findall(raw_subject)
+                    current_jira_keys = parse_jira_keys_from_commit(raw_subject)
                 continue
 
             # Numstat line: <added> \t <removed> \t <filepath>
@@ -241,7 +241,7 @@ class GitMiner:
                     except ValueError:
                         ts = 0
                     subject = parts[4].strip()
-                    jira_keys = JIRA_KEY_REGEX.findall(subject)
+                    jira_keys = parse_jira_keys_from_commit(subject)
 
                     current_commit = {
                         "commit_hash": c_hash,

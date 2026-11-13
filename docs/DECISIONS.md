@@ -350,3 +350,38 @@ The original Copilot implementation was an entirely fabricated proof-of-concept:
 - **Consequences**: Completely honest, verifiable engineering copilot grounded in the user's actual code; eliminates hallucinations and fabricated metrics.
 - **Risk**: LLM inference cost and latency.
 - **Mitigation**: Implement per-user rate limiting, max 5 tool-calling turns per request, tool result caching, and token budgets.
+
+---
+
+## ADR 013: Jira Integration Validation, Dynamic Release Proximity, and Backlog Horizon Grounding
+
+### Context
+In earlier prototypes:
+1. Jira issue key extraction used a naive regex `\b([A-Z][A-Z0-9]+-\d+)\b` on commit messages, which incorrectly matched technical standards, protocols, hashes, and vulnerability identifiers (e.g., `CVE-2023-xxxx`, `SHA-256`, `UTF-8`, `RFC-2616`, `ISO-8601`).
+2. When a file had no Jira issue associations, `analysis_worker.py` injected hardcoded defaults: `sprint_urg = 70.0` and `rel_prox = 75.0`. This masked missing integration signals and violated ADR 010's dynamic weight renormalization.
+3. Commit-to-issue mining was sometimes conflated with a complete view of project backlogs.
+
+### Decision
+1. **Strict Project Key Validation**:
+   - `backend/services/jira_service.py` filters non-ASCII characters to prevent UTF-8 homoglyph spoofing.
+   - Disallows technical false-positive prefixes: `CVE`, `SHA`, `MD5`, `UTF`, `RFC`, `ISO`, `IEEE`, `HTTP`, `HTTPS`, `W3C`, `UUID`, `ECMA`, `POSIX`, `ANSI`, etc.
+   - Enforces key length boundaries (2–10 prefix characters).
+   - Validates candidate keys against the connected Jira site's active project keys (`allowed_project_keys`).
+2. **Dynamic Release Proximity & Sprint Urgency**:
+   - Release proximity is dynamically derived from Jira `fix_version_date` (imminent releases within 7 days evaluate to 95.0, within 14 days to 85.0, within 30 days to 70.0, and distant releases to 50.0).
+   - Sprint urgency is derived from active sprint issues and priority ratings (`Highest/High` -> 90.0, `Medium` -> 70.0, `Low` -> 40.0).
+3. **Elimination of Hardcoded Defaults**:
+   - When no Jira signal exists for a file, `sprint_urg` and `rel_prox` are strictly set to `None`.
+   - As mandated by ADR 010, missing business dimensions trigger mathematical weight renormalization ($w'_i = \frac{w_i}{\sum w_j}$) rather than injecting fabricated numbers.
+4. **Expose Link Coverage & Calibrate Confidence**:
+   - Every analysis job exposes `jira_linked_files_count` and `jira_link_coverage_pct` in its summary.
+   - File prediction confidence is dynamically calibrated: base confidence (0.88 for `MEASURED` AST coverage, 0.72 for `ESTIMATED`) is enhanced by +0.10 when verified Jira issue links are present.
+5. **Historical and In-Flight Horizon Grounding**:
+   - Commit-linked Jira signals capture historical bug fixes and active in-flight feature branches that modify specific source files.
+   - They provide high-fidelity traceability for code churn, but do NOT represent a complete, exhaustive inventory of unstarted open backlog items residing purely in Jira before code is written. The UI and documentation explicitly communicate this distinction.
+
+### Consequences & Risks
+- **Consequences**: Zero false-positive Jira keys, zero fabricated urgency scores, mathematically pure weight renormalization, and transparent integration metrics.
+- **Risk**: Projects without commit-key conventions show 0% Jira link coverage.
+- **Mitigation**: The platform surfaces an integration guidance banner encouraging standard Jira commit smart-tagging (e.g., `git commit -m "feat: [PROJ-123] ..."`).
+

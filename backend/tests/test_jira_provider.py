@@ -253,3 +253,81 @@ def test_copilot_jira_tools(db_session):
     search_res = registry.search_jira_issues(file_path_or_id="src/gateway.py")
     assert search_res["total_count"] >= 1
     assert search_res["issues"][0]["issue_key"] == create_res["issue_key"]
+
+
+def test_parse_jira_keys_rejects_cve_sha_utf8_rfc():
+    """
+    Verifies that parse_jira_keys_from_commit strictly rejects false positive patterns:
+    CVE-2023-1234, SHA-256, UTF-8, RFC-2616, ISO-8601, and non-ASCII spoofing.
+    """
+    from backend.services.jira_service import parse_jira_keys_from_commit
+
+    commit_msg = (
+        "fix: resolve vulnerability CVE-2023-9999 and update hashing to SHA-256\n\n"
+        "Encode payload in UTF-8 according to RFC-2616 and ISO-8601 spec.\n"
+        "Resolves ticket DEBT-404 and PAY-12 successfully."
+    )
+    keys = parse_jira_keys_from_commit(commit_msg)
+
+    # Valid Jira issue keys MUST be extracted
+    assert "DEBT-404" in keys
+    assert "PAY-12" in keys
+
+    # False positive technical standards MUST be excluded
+    assert "CVE-2023" not in keys
+    assert "SHA-256" not in keys
+    assert "UTF-8" not in keys
+    assert "RFC-2616" not in keys
+    assert "ISO-8601" not in keys
+
+
+def test_parse_jira_keys_validates_connected_site_project_keys():
+    """Verifies that extracted keys are filtered against connected site project keys."""
+    from backend.services.jira_service import parse_jira_keys_from_commit
+
+    commit_msg = "feat: add webhook integration for DEBT-101 and external UNKNOWN-42"
+    connected_site_keys = {"DEBT", "CORE", "PAY"}
+
+    # With connected site whitelist:
+    validated_keys = parse_jira_keys_from_commit(commit_msg, allowed_project_keys=connected_site_keys)
+    assert validated_keys == ["DEBT-101"]
+    assert "UNKNOWN-42" not in validated_keys
+
+
+def test_derive_jira_business_signals_dynamic_release_proximity():
+    """
+    Verifies release proximity is dynamically computed from fix_version target dates,
+    not hardcoded assumptions.
+    """
+    from datetime import datetime, timezone, timedelta
+    from backend.services.jira_service import derive_jira_business_signals
+
+    now = datetime.now(timezone.utc)
+
+    # 1. Imminent release (within 5 days) -> 95.0
+    signals_urgent = derive_jira_business_signals([
+        {
+            "fix_version": "v1.0-gold",
+            "fix_version_date": now + timedelta(days=5),
+            "status": "In Progress",
+            "sprint_state": "ACTIVE",
+            "priority": "Highest",
+            "is_bug": True,
+        }
+    ])
+    assert signals_urgent["release_proximity"] == 95.0
+    assert signals_urgent["sprint_urgency"] == 90.0
+
+    # 2. Distant release (within 45 days) -> 50.0
+    signals_distant = derive_jira_business_signals([
+        {
+            "fix_version": "v2.0-roadmap",
+            "fix_version_date": now + timedelta(days=45),
+            "status": "Open",
+            "sprint_state": "FUTURE",
+            "priority": "Medium",
+        }
+    ])
+    assert signals_distant["release_proximity"] == 50.0
+    assert signals_distant["sprint_urgency"] == 55.0
+

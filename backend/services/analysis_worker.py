@@ -195,8 +195,8 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                         ))
                 else:
                     cust_impact = 85.0 if is_core else 50.0
-                    sprint_urg = 70.0
-                    rel_prox = 75.0
+                    sprint_urg = None
+                    rel_prox = None
                     biz_crit = 90.0 if is_core else 60.0
                     bctx_provenance = "USER_RULE" if is_core else "DEFAULT"
 
@@ -219,7 +219,10 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 # Save ML Prediction (Defect probability calibrated from churn & complexity)
                 pred_risk = min(99.0, max(10.0, tr_score * 0.95))
                 defect_prob = min(0.95, max(0.05, tr_score / 110.0))
-                confidence = 0.95 if f_info.get("coverage_provenance") == "MEASURED" else 0.82
+                cov_prov = f_info.get("coverage_provenance", "ESTIMATED")
+                has_jira_signal = len(matched_issues) > 0
+                base_conf = 0.88 if cov_prov == "MEASURED" else 0.72
+                confidence = round(min(0.98, base_conf + (0.10 if has_jira_signal else 0.0)), 2)
                 pred_obj = MLPrediction(
                     workspace_id=workspace_id,
                     file_id=file_obj.id,
@@ -254,6 +257,9 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
             RecommendationService.generate_all_recommendations(db, repo.id)
 
             # Stage 6: Completion
+            jira_linked_files_count = sum(1 for f_info in analyzed_files if len(file_jira_map.get(f_info["path"], [])) > 0)
+            jira_link_coverage_pct = round((jira_linked_files_count / max(1, saved_files_count)) * 100.0, 1)
+
             job.status = "COMPLETED"
             job.stage = "Analysis completed successfully."
             job.progress_pct = 100
@@ -265,6 +271,8 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 "coverage_pct": cov_summary.get("coverage_pct"),
                 "coverage_provenance": cov_summary.get("coverage_provenance"),
                 "total_source_files": cov_summary.get("total_source_files"),
+                "jira_linked_files_count": jira_linked_files_count,
+                "jira_link_coverage_pct": jira_link_coverage_pct,
             })
             db.commit()
 

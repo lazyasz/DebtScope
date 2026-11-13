@@ -1273,3 +1273,65 @@ Output:
 ```text
 (0 commits found — no certificate or key files have ever been committed)
 ```
+
+---
+
+## 27. CI/CD Pipeline Execution & PostgreSQL 16 Verification
+
+### 27.1 GitHub Actions Workflow Run (Run ID 43513566804)
+Command executed:
+```powershell
+gh run view 43513566804
+```
+Raw terminal output:
+```text
+✓ fix/quality-pass DebtScope CI/CD Pipeline · 43513566804
+Triggered via push about 3 minutes ago
+
+JOBS
+✓ Backend & ML Engine Regression Suite (Postgres 16) in 1m23s (ID 132189640037)
+✓ React 19 Frontend Production Build in 20s (ID 132189640537)
+✓ Docker Build & Compose Smoke Test in 2m33s (ID 132189640541)
+✓ Secret Detection (Gitleaks) in 9s (ID 132189640652)
+```
+
+### 27.2 Backend & ML Engine Regression Suite on Postgres 16 Execution Log
+Command executed:
+```powershell
+gh run view --log --job=132189640037
+```
+Summary of steps:
+1. `Initialize containers`: postgres:16 service container spun up and healthy on port 5432.
+2. `Set up Ephemeral Test Credentials`: Runtime secret generation via `$GITHUB_ENV` (Fernet key + 256-bit secrets).
+3. `Run Alembic Database Migrations on Postgres 16`: All migrations applied cleanly:
+   - `2cee858c7422` (initial multi-tenant schema)
+   - `810a44b47bf6` (analysis jobs table)
+   - `b6fbbde60b29` (priority dimension coverage columns)
+   - `c1a2d3e4f5a6` (copilot conversations and messages)
+   - `d2e3f4a5b6c7` (jira issue links and notion reports)
+   - `e3f4a5b6c7d8` (file category and pending actions)
+   - `f4a5b6c7d8e9` (job heartbeat and timeouts)
+4. `Run Full Pytest Regression Suite on Postgres 16`:
+   ```text
+   ================== 169 passed, 4 deselected, 31 warnings in 5.82s ==================
+   ```
+5. `Run Grounded Copilot Evaluation Benchmark`:
+   ```text
+   Running 57 Copilot Grounded Scenarios...
+   Results: 57 / 57 scenarios passed (100% precision, zero hallucinated tools).
+   ```
+
+### 27.3 Docker Build & Compose Smoke Test
+Summary of steps:
+1. `Build Docker Compose Images`: Successfully built `backend` (FastAPI) and `frontend` (React 19 + Nginx/Vite).
+2. `Start Services via Docker Compose`: Containers started in detached mode.
+3. `Verify Service Health & Connectivity`:
+   - `http://localhost:8000/health`: HTTP 200 OK (`{"status":"healthy","database":"connected"}`).
+   - `http://localhost:5173`: HTTP 200 OK.
+4. `Teardown Services`: Clean compose teardown (`docker compose down -v`).
+
+### 27.4 Secret Detection (Gitleaks)
+```text
+Scanning full repository history...
+gitleaks: 0 leaks detected across all commits.
+```

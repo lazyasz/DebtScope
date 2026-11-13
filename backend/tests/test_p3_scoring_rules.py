@@ -181,3 +181,52 @@ def test_business_rules_application_to_repo(db_session):
     assert ctx2 is not None
     assert ctx2.business_criticality <= 25.0
     assert ctx2.domain_tag == "testing"
+
+
+def test_provenance_honesty_and_technical_only_labeling(db_session):
+    """
+    Verifies Item 3 provenance rules:
+    1. DEFAULT / DEFAULT_RULE business inputs enter score but are labeled:
+       'technical-only (business context not configured)'
+    2. Simulated data is tagged SIMULATED and excluded from confidence boost.
+    3. User-defined rules or live integrations show genuine coverage without disclaimer.
+    """
+    repo = DataService.get_or_create_repository(
+        db_session, RepositoryCreate(name="prov-repo", url="https://github.com/prov/test.git")
+    )
+    f_default = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="src/utils/calc.py", file_name="calc.py", language="Python", lines_of_code=100)
+    )
+    DataService.ingest_engineering_metric(
+        db_session,
+        EngineeringMetricCreate(file_id=f_default.id, cyclomatic_complexity=10.0, technical_risk_score=50.0)
+    )
+    # 1. Default provenance
+    BusinessService.get_or_create_business_context(
+        db_session,
+        BusinessContextCreate(file_id=f_default.id, business_criticality=50.0)
+    )
+    score_def = PriorityService.calculate_file_priority(db_session, f_default.id)
+    assert "technical-only (business context not configured)" in score_def.dimension_coverage
+
+    # 2. DEFAULT_RULE provenance
+    ctx = db_session.query(BusinessContext).filter(BusinessContext.file_id == f_default.id).first()
+    ctx.provenance = "DEFAULT_RULE"
+    db_session.commit()
+    score_rule = PriorityService.calculate_file_priority(db_session, f_default.id)
+    assert "technical-only (business context not configured)" in score_rule.dimension_coverage
+
+    # 3. Genuine INTEGRATION provenance
+    ctx.provenance = "INTEGRATION"
+    db_session.commit()
+    score_integ = PriorityService.calculate_file_priority(db_session, f_default.id)
+    assert "technical-only" not in score_integ.dimension_coverage
+    assert "of 5 dimensions" in score_integ.dimension_coverage
+
+    # 4. SIMULATED provenance
+    ctx.provenance = "SIMULATED"
+    db_session.commit()
+    score_sim = PriorityService.calculate_file_priority(db_session, f_default.id)
+    assert "simulated data, excluded from confidence" in score_sim.dimension_coverage
+

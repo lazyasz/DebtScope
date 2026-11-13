@@ -179,15 +179,18 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 jira_keys = hist.get("jira_keys", [])
                 jira_issues = []
 
-                if jira_keys:
-                    jira_prov = JiraProvider()
+                jira_prov = JiraProvider()
+                is_live_jira = jira_prov.is_live_configured()
+                is_sim_jira = getattr(settings, "JIRA_SIMULATION_MODE", False)
+
+                if jira_keys and (is_live_jira or is_sim_jira):
                     jira_issues = [jira_prov.fetch_or_simulate_issue(k) for k in jira_keys]
                     b_signals = derive_jira_business_signals(jira_issues)
                     cust_impact = b_signals["customer_impact"]
                     sprint_urg = b_signals["sprint_urgency"]
                     rel_prox = b_signals["release_proximity"]
                     biz_crit = 90.0 if is_core else 65.0
-                    bctx_provenance = "INTEGRATION"
+                    bctx_provenance = "INTEGRATION" if is_live_jira else "SIMULATED"
 
                     for iss in jira_issues:
                         db.add(JiraIssueLink(
@@ -208,7 +211,7 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                     sprint_urg = None
                     rel_prox = None
                     biz_crit = 90.0 if is_core else 60.0
-                    bctx_provenance = "USER_RULE" if is_core else "DEFAULT"
+                    bctx_provenance = "DEFAULT_RULE" if is_core else "DEFAULT"
 
                 bctx_obj = BusinessContext(
                     workspace_id=workspace_id,
@@ -225,12 +228,12 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 )
                 db.add(bctx_obj)
 
-
                 # Save ML Prediction (Defect probability calibrated from churn & complexity)
                 pred_risk = min(99.0, max(10.0, tr_score * 0.95))
                 defect_prob = min(0.95, max(0.05, tr_score / 110.0))
                 cov_prov = f_info.get("coverage_provenance", "ESTIMATED")
-                has_jira_signal = len(jira_issues) > 0
+                # Exclude SIMULATED data from confidence: ONLY live verified INTEGRATION boosts confidence
+                has_jira_signal = len(jira_issues) > 0 and bctx_provenance == "INTEGRATION"
                 base_conf = 0.88 if cov_prov == "MEASURED" else 0.72
                 confidence = round(min(0.98, base_conf + (0.10 if has_jira_signal else 0.0)), 2)
                 pred_obj = MLPrediction(

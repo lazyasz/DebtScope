@@ -518,4 +518,48 @@ backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_effort_blend_is_se
 ================= 8 passed, 20 deselected, 1 warning in 0.14s =================
 ```
 
+---
+
+## 13. Item 3: Provenance Honesty & Technical-Only Labeling
+
+### 13.1 Explanation of False Provenance Sources
+During the initial repository scan of `pallets/flask`:
+1. **`USER_RULE` (2.4% of files)**:
+   - *Source*: In `backend/services/analysis_worker.py`, line 178 checked `any(p in rel_path.lower() for p in ("auth", "pay", "core", "api", "order"))` and tagged matching files as `"USER_RULE"`. This was an internal heuristic rather than a user-authored business rule.
+   - *Remediation*: Path heuristics are now strictly tagged `"DEFAULT_RULE"`. The tag `"USER_RULE"` is reserved exclusively for explicit user-created or user-configured rule mappings.
+2. **`INTEGRATION` (2.4% of files)**:
+   - *Source*: Line 182-190 extracted commit message keys matching issue regex and invoked `JiraProvider().fetch_or_simulate_issue(k)`, unconditionally assigning `bctx_provenance = "INTEGRATION"` even though no live Jira workspace was connected.
+   - *Remediation*: `analysis_worker.py` now inspects `JiraProvider.is_live_configured()`. Simulated fixtures are tagged `"SIMULATED"`. If simulation mode is disabled, no simulated issues are synthesized.
+3. **Confidence Shielding**:
+   - Simulated integration data is excluded from confidence scoring (`has_jira_signal = len(jira_issues) > 0 and bctx_provenance == "INTEGRATION"`). The +0.10 confidence boost is only awarded for verified live integrations.
+
+### 13.2 Technical-Only Score Labeling
+When business context is unconfigured (`bctx.provenance in ("DEFAULT", "DEFAULT_RULE")`):
+- `dimension_coverage` is explicitly formatted and reported across API and UI as:
+  `"{count} of 5 dimensions — technical-only (business context not configured)"`
+- When genuine user rules or live Jira/Notion are active, full verified provenance (`INTEGRATION` or `USER_RULE`) is reported.
+
+### 13.3 Test Evidence
+```powershell
+py -m pytest backend/tests/test_p3_scoring_rules.py -v
+```
+Output:
+```
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\dhruv\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collecting ... collected 5 items
+
+backend/tests/test_p3_scoring_rules.py::test_dynamic_weight_renormalization_missing_dimensions PASSED [ 20%]
+backend/tests/test_p3_scoring_rules.py::test_quadrant_classification_exhaustive PASSED [ 40%]
+backend/tests/test_p3_scoring_rules.py::test_business_rules_matching PASSED [ 60%]
+backend/tests/test_p3_scoring_rules.py::test_business_rules_application_to_repo PASSED [ 80%]
+backend/tests/test_p3_scoring_rules.py::test_provenance_honesty_and_technical_only_labeling PASSED [100%]
+
+======================== 5 passed, 1 warning in 0.46s =========================
+```
+
+
 

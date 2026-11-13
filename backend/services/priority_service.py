@@ -101,7 +101,13 @@ class PriorityService:
             baseline_score = composite_tech_risk
 
         scored_dims_count = len(active_dims)
-        dim_coverage_text = f"{scored_dims_count} of 5 dimensions"
+        b_prov = getattr(bctx, "provenance", "DEFAULT") if bctx else "DEFAULT"
+        if b_prov in ("DEFAULT", "DEFAULT_RULE"):
+            dim_coverage_text = f"{scored_dims_count} of 5 dimensions — technical-only (business context not configured)"
+        elif b_prov == "SIMULATED":
+            dim_coverage_text = f"{scored_dims_count} of 5 dimensions (simulated data, excluded from confidence)"
+        else:
+            dim_coverage_text = f"{scored_dims_count} of 5 dimensions"
 
         # Effort & ROI Adjustment
         roi_score = (baseline_score / max(15.0, effort)) * 100.0

@@ -55,9 +55,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt psycopg2-binary
 
-      - name: Run Alembic Database Migrations on Postgres 16
+      - name: Verify Alembic Migrations Lifecycle on Postgres 16 (Upgrade / Downgrade / Upgrade / Check)
         run: |
           python -m alembic upgrade head
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+          python -m alembic check
 
       - name: Run Full Pytest Regression Suite on Postgres 16
         run: |

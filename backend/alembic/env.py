@@ -19,8 +19,10 @@ from backend.database.connection import engine
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set sqlalchemy.url dynamically from application settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Set sqlalchemy.url dynamically from application settings or environment/command line
+x_args = context.get_x_argument(as_dictionary=True)
+db_url = x_args.get("db_url") or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
@@ -60,11 +62,20 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    with engine.connect() as connection:
+    url = config.get_main_option("sqlalchemy.url")
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = url
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True if "sqlite" in settings.DATABASE_URL else False,
+            render_as_batch=True if "sqlite" in url else False,
         )
 
         with context.begin_transaction():

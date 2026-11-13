@@ -161,7 +161,7 @@ async def exchange_google_code(code: str, db: Session) -> Tuple[User, str]:
             },
         )
         if tok_res.status_code != 200:
-            logger.error("Google token exchange failed: %s", tok_res.text)
+            logger.error("Google token exchange failed with HTTP status %s", tok_res.status_code)
             raise ValueError("Google token exchange failed. Please try signing in again.")
 
         tok_data = tok_res.json()

@@ -148,6 +148,12 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
                 yield CopilotStreamEvent("tool_call", {"tool": "create_jira_issue", "args": {"file_path_or_id": target}})
                 yield CopilotStreamEvent("tool_result", {"tool": "create_jira_issue", "result": tool_res})
                 act_id = tool_res.get("action_id", "act_unknown")
+                yield CopilotStreamEvent("action_staged", {
+                    "action_id": act_id,
+                    "tool_name": "create_jira_issue",
+                    "arguments": tool_res.get("arguments", {"file_path_or_id": target}),
+                    "expires_at": tool_res.get("expires_at"),
+                })
                 yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: Action staged as `{act_id}`. Please confirm in the UI to proceed with creating Jira ticket.")
                 yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": True, "action_id": act_id})
                 return
@@ -156,6 +162,12 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
                 yield CopilotStreamEvent("tool_call", {"tool": "export_notion_report", "args": {"title": "Executive Technical Debt Audit"}})
                 yield CopilotStreamEvent("tool_result", {"tool": "export_notion_report", "result": tool_res})
                 act_id = tool_res.get("action_id", "act_unknown")
+                yield CopilotStreamEvent("action_staged", {
+                    "action_id": act_id,
+                    "tool_name": "export_notion_report",
+                    "arguments": tool_res.get("arguments", {"title": "Executive Technical Debt Audit"}),
+                    "expires_at": tool_res.get("expires_at"),
+                })
                 yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: Action staged as `{act_id}`. Please confirm in the UI to proceed with exporting to Notion.")
                 yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": True, "action_id": act_id})
                 return
@@ -453,6 +465,13 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
                             yield CopilotStreamEvent("tool_call", {"tool": tool_name, "args": args})
                             tool_res = tool_registry.execute_tool(tool_name, args)
                             yield CopilotStreamEvent("tool_result", {"tool": tool_name, "result": tool_res})
+                            if tool_res.get("action_required") == "CONFIRMATION_REQUIRED":
+                                yield CopilotStreamEvent("action_staged", {
+                                    "action_id": tool_res.get("action_id"),
+                                    "tool_name": tool_name,
+                                    "arguments": tool_res.get("arguments", {}),
+                                    "expires_at": tool_res.get("expires_at"),
+                                })
 
                 yield CopilotStreamEvent("done", {"provider": "gemini"})
             except Exception as e:

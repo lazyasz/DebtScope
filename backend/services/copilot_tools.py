@@ -190,6 +190,7 @@ class CopilotToolRegistry:
             "gate": "server_side_confirmation_gate",
             "action_id": action_id,
             "tool_name": tool_name,
+            "arguments": clean_args,
             "arguments_hash": arguments_hash,
             "expires_at": expires_at.isoformat(),
             "message": (
@@ -672,11 +673,11 @@ class CopilotToolRegistry:
         action_id: str,
         user_id: str,
         workspace_id: str,
-        client_arguments: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Strict server-side verification and single-use execution of a staged pending write action.
-        Only dedicated, authenticated user endpoint can call this.
+        Accepts NO client-supplied arguments: strictly executes using the stored payload from the
+        server PendingAction database record. Only dedicated, authenticated user endpoint can call this.
         """
         action = db.query(PendingAction).filter(PendingAction.id == action_id).first()
         if not action:
@@ -697,12 +698,8 @@ class CopilotToolRegistry:
             db.commit()
             raise HTTPException(status_code=400, detail=f"Action '{action_id}' has expired.")
 
+        # Stored payload from pending action database record ONLY
         staged_args = json.loads(action.arguments_json)
-        if client_arguments is not None:
-            clean_client = {k: v for k, v in client_arguments.items() if k not in ("confirmed", "action_id")}
-            client_hash = hashlib.sha256(json.dumps(clean_client, sort_keys=True).encode("utf-8")).hexdigest()
-            if client_hash != action.arguments_hash:
-                raise HTTPException(status_code=400, detail="Action arguments hash mismatch: arguments have been altered.")
 
         registry = cls(db=db, workspace_id=workspace_id, user_id=user_id)
         if action.tool_name == "create_jira_issue":

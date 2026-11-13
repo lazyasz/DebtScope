@@ -28,6 +28,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from backend.database.models import (
     Base, User, Workspace, Repository, SourceFile, PriorityScore,
@@ -40,7 +41,11 @@ from backend.services.copilot_llm import DeterministicMockCopilotAdapter
 @pytest.fixture
 def test_env():
     """Sets up an isolated test database with workspace, users, repo, and file."""
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
@@ -204,30 +209,99 @@ class TestCopilotConfirmationGate:
         assert exc_info.value.status_code == 403
         assert "permission denied" in exc_info.value.detail.lower()
 
-    def test_confirm_endpoint_rejects_altered_arguments(self, test_env):
-        """If arguments provided at confirmation do not match the original hash, reject with 400."""
+    def test_confirm_endpoint_executes_stored_payload_without_client_args(self, test_env):
+        """
+        Amendment B: Confirmation endpoint accepts NO client-supplied arguments.
+        Execution strictly uses the server-stored payload from PendingAction record in DB.
+        """
         registry = test_env["registry"]
         db = test_env["db"]
 
-        staged = registry.create_jira_issue("src/payments/billing.py", summary="Legit Refactoring")
+        staged = registry.create_jira_issue("src/payments/billing.py", summary="Legit Server-Side Refactoring")
         action_id = staged["action_id"]
 
-        # Attempt to confirm with altered argument payload
-        tampered_args = {
-            "file_path_or_id": "src/payments/billing.py",
-            "summary": "Malicious Tampered Summary",  # Changed!
-            "issue_type": "Task",
-        }
-        with pytest.raises(HTTPException) as exc_info:
-            CopilotToolRegistry.execute_confirmed_action(
-                db=db,
-                action_id=action_id,
-                user_id="usr_gate",
-                workspace_id="ws_gate_test",
-                client_arguments=tampered_args,
+        # Call with only (db, action_id, user_id, workspace_id) — zero client args
+        res = CopilotToolRegistry.execute_confirmed_action(
+            db=db,
+            action_id=action_id,
+            user_id="usr_gate",
+            workspace_id="ws_gate_test",
+        )
+        assert res["status"] == "success"
+        # Confirm the executed ticket took the stored summary from DB record
+        link = db.query(JiraIssueLink).filter(JiraIssueLink.workspace_id == "ws_gate_test").first()
+        assert link is not None
+        assert link.summary == "Legit Server-Side Refactoring"
+
+    def test_get_pending_action_endpoint_returns_stored_payload(self, test_env):
+        """Amendment B: GET /copilot/actions/{action_id} returns stored payload for UI review."""
+        from fastapi.testclient import TestClient
+        from backend.main import app
+        from backend.database.connection import get_db
+        from backend.database.tenant import get_current_user, get_current_workspace
+
+        registry = test_env["registry"]
+        db = test_env["db"]
+        user = db.query(User).filter_by(id="usr_gate").first()
+        ws = db.query(Workspace).filter_by(id="ws_gate_test").first()
+
+        staged = registry.create_jira_issue("src/payments/billing.py", summary="Review Me")
+        action_id = staged["action_id"]
+
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_current_workspace] = lambda: ws
+
+        try:
+            client = TestClient(app)
+            res = client.get(f"/api/v1/copilot/actions/{action_id}")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["id"] == action_id
+            assert data["tool_name"] == "create_jira_issue"
+            assert data["arguments"]["file_path_or_id"] == "src/payments/billing.py"
+            assert data["status"] == "PENDING"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_confirm_endpoint_origin_check_blocks_csrf(self, test_env):
+        """Amendment B: Origin check on confirm endpoint blocks unauthorized cross-origin execution."""
+        from fastapi.testclient import TestClient
+        from backend.main import app
+        from backend.database.connection import get_db
+        from backend.database.tenant import get_current_user, get_current_workspace
+
+        registry = test_env["registry"]
+        db = test_env["db"]
+        user = db.query(User).filter_by(id="usr_gate").first()
+        ws = db.query(Workspace).filter_by(id="ws_gate_test").first()
+
+        staged = registry.create_jira_issue("src/payments/billing.py")
+        action_id = staged["action_id"]
+
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_current_workspace] = lambda: ws
+
+        try:
+            client = TestClient(app)
+            # 1. Untrusted origin -> 403 Forbidden
+            res_evil = client.post(
+                f"/api/v1/copilot/actions/{action_id}/confirm",
+                headers={"Origin": "https://evil-cross-site-attacker.com"}
             )
-        assert exc_info.value.status_code == 400
-        assert "hash mismatch" in exc_info.value.detail.lower() or "altered" in exc_info.value.detail.lower()
+            assert res_evil.status_code == 403
+            assert "forbidden" in res_evil.json().get("detail", "").lower()
+
+            # 2. Trusted / same-origin request -> succeeds
+            res_ok = client.post(
+                f"/api/v1/copilot/actions/{action_id}/confirm",
+                headers={"Origin": "http://localhost:5173"}
+            )
+            assert res_ok.status_code == 200
+            assert res_ok.json()["status"] == "success"
+        finally:
+            app.dependency_overrides.clear()
 
     def test_confirm_endpoint_rejects_expired_action(self, test_env):
         """Expired pending action must be rejected with 400."""

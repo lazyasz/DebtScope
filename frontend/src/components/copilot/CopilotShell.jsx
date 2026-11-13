@@ -138,6 +138,12 @@ export default function CopilotShell() {
               );
             } else if (event.type === 'tool_result') {
               setActiveTool(null);
+            } else if (event.type === 'action_staged') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId ? { ...m, stagedAction: event.data } : m
+                )
+              );
             } else if (event.type === 'citation') {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -285,13 +291,11 @@ export default function CopilotShell() {
                   <div className="whitespace-pre-wrap">{renderMessageContent(msg.text)}</div>
                 )}
 
-                {/* Action Confirmation Gate Widget */}
-                {(() => {
-                  const match = msg.text?.match(/act_[a-f0-9]{32}/);
-                  if (!match) return null;
-                  const actionId = match[0];
-                  const isExecuting = executingAction === actionId;
-                  const outcome = actionResults[actionId];
+                {/* Structured Action Confirmation Gate Widget (Driven by action_staged event) */}
+                {msg.stagedAction && (() => {
+                  const { action_id, tool_name, arguments: actionArgs } = msg.stagedAction;
+                  const isExecuting = executingAction === action_id;
+                  const outcome = actionResults[action_id];
 
                   return (
                     <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 space-y-2">
@@ -300,10 +304,21 @@ export default function CopilotShell() {
                           <AlertTriangle className="w-4 h-4 text-amber-600" />
                           <span>Explicit Authorization Required</span>
                         </div>
-                        <span className="font-mono text-[10px] text-amber-700">{actionId}</span>
+                        <span className="font-mono text-[10px] text-amber-700">{action_id}</span>
                       </div>
+                      
+                      {/* Render Stored Payload from Pending Action Record */}
+                      <div className="p-2 bg-white/80 rounded border border-amber-200 text-[11px] font-mono space-y-1">
+                        <div className="font-bold text-[#161e10]">Operation: {tool_name}</div>
+                        {actionArgs && Object.entries(actionArgs).map(([k, v]) => (
+                          <div key={k} className="text-[#555]">
+                            <span className="font-semibold text-[#333]">{k}:</span> {String(v)}
+                          </div>
+                        ))}
+                      </div>
+
                       <p className="text-[11px] text-amber-800">
-                        This operation modifies external workspace resources. Click below to verify and execute this single-use action.
+                        This operation modifies external workspace resources. Execution is strictly bound to the stored server payload above.
                       </p>
                       {outcome ? (
                         <div className={`p-2 rounded text-xs font-mono font-bold ${outcome.success ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
@@ -313,18 +328,18 @@ export default function CopilotShell() {
                         <button
                           disabled={isExecuting}
                           onClick={async () => {
-                            setExecutingAction(actionId);
+                            setExecutingAction(action_id);
                             try {
-                              const res = await fetch(`${API_BASE_URL}/api/v1/copilot/actions/${actionId}/confirm`, {
+                              // Confirmation endpoint accepts NO client arguments (zero tamper risk)
+                              const res = await fetch(`${API_BASE_URL}/api/v1/copilot/actions/${action_id}/confirm`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
                                 credentials: 'include',
                               });
                               const data = await res.json();
                               if (!res.ok) throw new Error(data.detail || 'Confirmation failed');
                               setActionResults((prev) => ({
                                 ...prev,
-                                [actionId]: {
+                                [action_id]: {
                                   success: true,
                                   message: `✅ Action executed: ${data.result?.issue_key || data.result?.page_url || 'Success'}`,
                                 },
@@ -332,7 +347,7 @@ export default function CopilotShell() {
                             } catch (err) {
                               setActionResults((prev) => ({
                                 ...prev,
-                                [actionId]: { success: false, message: `❌ Error: ${err.message}` },
+                                [action_id]: { success: false, message: `❌ Error: ${err.message}` },
                               }));
                             } finally {
                               setExecutingAction(null);

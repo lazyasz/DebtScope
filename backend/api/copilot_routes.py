@@ -8,14 +8,16 @@ import uuid
 import json
 import logging
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from urllib.parse import urlparse
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from backend.config import settings
 from backend.database.connection import get_db
 from backend.database.tenant import get_current_user, get_current_workspace
-from backend.database.models import User, Workspace, CopilotConversation, CopilotMessage, SourceFile
+from backend.database.models import User, Workspace, CopilotConversation, CopilotMessage, SourceFile, PendingAction
 from backend.services.copilot_tools import CopilotToolRegistry
 from backend.services.copilot_llm import get_copilot_llm, CopilotStreamEvent
 
@@ -248,29 +250,73 @@ def get_conversation_messages(
     ]
 
 
-class ConfirmActionPayload(BaseModel):
-    arguments: Optional[Dict[str, Any]] = None
+def _verify_origin(request: Request) -> None:
+    """Verifies that requests originate from an allowed origin to prevent cross-site action execution."""
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    if not origin:
+        return  # Same-origin or non-browser client
+
+    parsed = urlparse(origin)
+    origin_clean = f"{parsed.scheme}://{parsed.netloc}"
+    # Wildcard '*' is never valid for Origin CSRF validation on write confirmation
+    allowed = {o for o in settings.ALLOWED_ORIGINS if o != "*"}
+    if settings.FRONTEND_URL:
+        parsed_fe = urlparse(settings.FRONTEND_URL)
+        allowed.add(f"{parsed_fe.scheme}://{parsed_fe.netloc}")
+
+    if origin_clean not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cross-Origin write confirmation forbidden from origin: {origin_clean}",
+        )
+
+
+@router.get("/actions/{action_id}", summary="Get Staged Pending Action Details")
+def get_pending_action(
+    action_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    """
+    Fetches the server-stored payload of a staged pending action for UI review.
+    Enforces user ownership and tenant workspace isolation.
+    """
+    action = db.query(PendingAction).filter(PendingAction.id == action_id).first()
+    if not action:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending action not found.")
+    if action.workspace_id != workspace.id or action.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied for this action.")
+
+    return {
+        "id": action.id,
+        "tool_name": action.tool_name,
+        "arguments": json.loads(action.arguments_json),
+        "status": action.status,
+        "expires_at": action.expires_at.isoformat() if action.expires_at else None,
+        "created_at": action.created_at.isoformat() if action.created_at else None,
+    }
 
 
 @router.post("/actions/{action_id}/confirm", summary="Confirm and Execute Staged Copilot Write Action")
 def confirm_action(
     action_id: str,
-    payload: Optional[ConfirmActionPayload] = None,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     workspace: Workspace = Depends(get_current_workspace),
 ):
     """
     Dedicated user-authenticated endpoint to execute a staged single-use write action.
-    Strictly verifies user ownership, workspace tenant boundaries, action status, expiry,
-    and arguments hash matching. The AI model cannot call or spoof this endpoint.
+    Accepts NO client-supplied arguments: strictly executes using the stored payload from the
+    server PendingAction record. Origin check protects against CSRF.
     """
-    client_args = payload.arguments if payload else None
+    _verify_origin(request)
     return CopilotToolRegistry.execute_confirmed_action(
         db=db,
         action_id=action_id,
         user_id=user.id,
         workspace_id=workspace.id,
-        client_arguments=client_args,
     )
+
 

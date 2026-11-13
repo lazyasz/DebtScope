@@ -588,6 +588,67 @@ With `JIRA_SIMULATION_MODE=False` and `NOTION_SIMULATION_MODE=False`:
   | `SIMULATED` | 0 | **0.0%** | Zero simulated fixtures leaked |
 - **Score Labeling**: 100% of analyzed files display `3 of 5 dimensions — technical-only (business context not configured)`.
 
+---
+
+## 15. Amendment B: Confirmation Endpoint Hardening & Origin Verification
+
+### 15.1 Architecture & Security Properties
+1. **Zero Client-Supplied Arguments**:
+   - `POST /api/v1/copilot/actions/{action_id}/confirm` accepts NO request body / client arguments.
+   - Execution strictly looks up the server-stored `PendingAction` record in the database (`arguments_json`), which was staged during the initial user interaction.
+   - Any client payload is ignored; parameter tampering (e.g. altering target file, summary, or issue type) is impossible at confirmation time.
+
+2. **UI Stored Payload Rendering via Structured Events**:
+   - In `CopilotShell.jsx`, the confirmation button is NOT triggered by regex text scraping on the assistant's message.
+   - Instead, the backend emits a structured Server-Sent Event `action_staged` (`{"action_id": "...", "tool_name": "...", "arguments": {...}}`).
+   - The UI stores this structured object in `msg.stagedAction`, renders the exact stored arguments from the server record in an explicit review card, and executes `POST /api/v1/copilot/actions/{action_id}/confirm` with no body.
+   - An additional review endpoint `GET /api/v1/copilot/actions/{action_id}` is provided to fetch stored payload directly from the database under strict workspace and user ownership checks.
+
+3. **SameSite Cookie Configuration**:
+   - Verified that `backend/config.py` specifies `COOKIE_SAMESITE: str = "lax"`.
+   - Verified that `backend/api/auth_routes.py` applies `samesite=settings.COOKIE_SAMESITE` to all session cookies (`debtscope_session`), preventing cross-site ambient credential transmission on normal cross-site subrequests.
+
+4. **Origin Check on Confirmation Endpoint**:
+   - Added `_verify_origin(request)` to `POST /api/v1/copilot/actions/{action_id}/confirm`.
+   - Cross-origin requests from untrusted origins are rejected with `403 Forbidden` (`Cross-Origin write confirmation forbidden from origin: <origin>`).
+   - Wildcard `*` in `ALLOWED_ORIGINS` is explicitly filtered out for Origin CSRF validation on write confirmations.
+
+### 15.2 Unit Test Execution Output
+Command run: `py -m pytest backend/tests/test_copilot_confirmation_gate.py -v`
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\dhruv\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collecting ... collected 15 items
+
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_create_jira_issue_stages_pending_action PASSED [  6%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_export_notion_report_stages_pending_action PASSED [ 13%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_model_supplied_confirmed_true_is_blocked_and_staged PASSED [ 20%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_forged_action_id PASSED [ 26%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_user_id PASSED [ 33%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_workspace_id PASSED [ 40%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_executes_stored_payload_without_client_args PASSED [ 46%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_get_pending_action_endpoint_returns_stored_payload PASSED [ 53%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_origin_check_blocks_csrf PASSED [ 60%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_expired_action PASSED [ 66%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_executes_and_enforces_single_use PASSED [ 73%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_notion_confirm_endpoint_executes_and_enforces_single_use PASSED [ 80%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_commit_message_refused PASSED [ 86%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_jira_summary_refused PASSED [ 93%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_notion_page_refused PASSED [100%]
+
+============================== warnings summary ===============================
+..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\dhruv\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 15 passed, 1 warning in 0.94s ========================
+```
+
+
 
 
 

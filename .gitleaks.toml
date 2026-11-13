@@ -1,0 +1,8 @@
+[allowlist]
+description = "Global allowlist for test fixtures, mock data, and documentation examples"
+paths = [
+    '''backend/tests/.*''',
+    '''docs/.*''',
+    '''evals/.*''',
+    '''\.github/workflows/.*''',
+]

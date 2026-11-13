@@ -66,47 +66,90 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_workspace_memberships_user_id'), ['user_id'], unique=False)
         batch_op.create_index(batch_op.f('ix_workspace_memberships_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('business_contexts', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.add_column(sa.Column('provenance', sa.String(length=30), nullable=True, server_default='DEFAULT'))
-        batch_op.create_index(batch_op.f('ix_business_contexts_workspace_id'), ['workspace_id'], unique=False)
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    existing_tables = set(insp.get_table_names())
 
-    with op.batch_alter_table('engineering_metrics', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.add_column(sa.Column('coverage_provenance', sa.String(length=30), nullable=True, server_default='ESTIMATED'))
-        batch_op.add_column(sa.Column('churn_provenance', sa.String(length=30), nullable=True, server_default='ESTIMATED'))
-        batch_op.create_index(batch_op.f('ix_engineering_metrics_workspace_id'), ['workspace_id'], unique=False)
+    # If base tables do not exist (e.g. fresh database setup), ensure base models are created first
+    if 'business_contexts' not in existing_tables or 'repositories' not in existing_tables:
+        from backend.database.models import Base
+        Base.metadata.create_all(bind=bind)
+        existing_tables = set(sa.inspect(bind).get_table_names())
 
-    with op.batch_alter_table('integration_connections', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_integration_connections_workspace_id'), ['workspace_id'], unique=False)
+    if 'business_contexts' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('business_contexts')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('business_contexts', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.add_column(sa.Column('provenance', sa.String(length=30), nullable=True, server_default='DEFAULT'))
+                batch_op.create_index(batch_op.f('ix_business_contexts_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('ml_predictions', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_ml_predictions_workspace_id'), ['workspace_id'], unique=False)
+    if 'engineering_metrics' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('engineering_metrics')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('engineering_metrics', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.add_column(sa.Column('coverage_provenance', sa.String(length=30), nullable=True, server_default='ESTIMATED'))
+                batch_op.add_column(sa.Column('churn_provenance', sa.String(length=30), nullable=True, server_default='ESTIMATED'))
+                batch_op.create_index(batch_op.f('ix_engineering_metrics_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('priority_scores', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_priority_scores_workspace_id'), ['workspace_id'], unique=False)
+    if 'integration_connections' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('integration_connections')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('integration_connections', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_integration_connections_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('recommendations', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_recommendations_workspace_id'), ['workspace_id'], unique=False)
+    if 'ml_predictions' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('ml_predictions')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('ml_predictions', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_ml_predictions_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('repositories', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.drop_index(batch_op.f('ix_repositories_name'))
-        batch_op.create_index(batch_op.f('ix_repositories_name'), ['name'], unique=False)
-        batch_op.create_index(batch_op.f('ix_repositories_workspace_id'), ['workspace_id'], unique=False)
-        batch_op.create_unique_constraint('uix_workspace_repo_name', ['workspace_id', 'name'])
+    if 'priority_scores' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('priority_scores')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('priority_scores', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_priority_scores_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('source_files', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_source_files_workspace_id'), ['workspace_id'], unique=False)
+    if 'recommendations' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('recommendations')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('recommendations', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_recommendations_workspace_id'), ['workspace_id'], unique=False)
 
-    with op.batch_alter_table('technical_debt_items', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
-        batch_op.create_index(batch_op.f('ix_technical_debt_items_workspace_id'), ['workspace_id'], unique=False)
+    if 'repositories' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('repositories')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('repositories', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                try:
+                    batch_op.drop_index(batch_op.f('ix_repositories_name'))
+                except Exception:
+                    pass
+                batch_op.create_index(batch_op.f('ix_repositories_name'), ['name'], unique=False)
+                batch_op.create_index(batch_op.f('ix_repositories_workspace_id'), ['workspace_id'], unique=False)
+                try:
+                    batch_op.create_unique_constraint('uix_workspace_repo_name', ['workspace_id', 'name'])
+                except Exception:
+                    pass
+
+    if 'source_files' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('source_files')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('source_files', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_source_files_workspace_id'), ['workspace_id'], unique=False)
+
+    if 'technical_debt_items' in existing_tables:
+        cols = [c['name'] for c in sa.inspect(bind).get_columns('technical_debt_items')]
+        if 'workspace_id' not in cols:
+            with op.batch_alter_table('technical_debt_items', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('workspace_id', sa.String(length=100), nullable=False, server_default='ws_demo'))
+                batch_op.create_index(batch_op.f('ix_technical_debt_items_workspace_id'), ['workspace_id'], unique=False)
 
     # ### end Alembic commands ###
 

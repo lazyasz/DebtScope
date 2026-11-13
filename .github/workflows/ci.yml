@@ -28,9 +28,6 @@ jobs:
     env:
       ENVIRONMENT: development
       DATABASE_URL: postgresql+psycopg2://postgres:postgres_ci_password@localhost:5432/debtscope_test
-      SECRET_KEY: test_secret_key_ci_environment_32bytes_min
-      JWT_SECRET: test_jwt_secret_ci_environment_32bytes_min
-      TOKEN_ENCRYPTION_KEY: jO6sB1JjIbyQVKkooyUsJrou4tx38pF8al656WmYkDg=
       DEV_SANDBOX_AUTH: "False"
       JIRA_SIMULATION_MODE: "False"
       NOTION_SIMULATION_MODE: "False"
@@ -44,6 +41,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+
+      - name: Set up Ephemeral Test Credentials
+        run: |
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> $GITHUB_ENV
+          echo "JWT_SECRET=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> $GITHUB_ENV
+          echo "TOKEN_ENCRYPTION_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
 
       - name: Install System Dependencies (Git & Build Tools)
         run: |
@@ -138,3 +141,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_IGNORE: "true"
+          GITLEAKS_CONFIG: ".gitleaks.toml"

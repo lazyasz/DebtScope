@@ -6,6 +6,7 @@ Executive Audit Report publishing, and Copilot Notion tools.
 
 import pytest
 import asyncio
+from backend.config import settings
 from backend.integrations.notion_provider import NotionProvider
 from backend.services.notion_service import (
     sync_backlog_to_notion,
@@ -38,8 +39,9 @@ def test_notion_auth_url_generation(notion_provider):
     assert "notion" in url
 
 
-def test_notion_exchange_code_sandbox(notion_provider):
+def test_notion_exchange_code_sandbox(notion_provider, monkeypatch):
     """Tests code exchange in sandbox mode returns mock access token and workspace info."""
+    monkeypatch.setattr(settings, "NOTION_SIMULATION_MODE", True)
     res = asyncio.run(notion_provider.exchange_code("notion_mock_auth_code_2026"))
     assert "access_token" in res
     assert "workspace_name" in res
@@ -133,19 +135,31 @@ def test_notion_service_criticality_applied_to_repository(db_session, notion_pro
     assert bctx.provenance == "USER_RULE"
 
 
-def test_copilot_notion_tool(db_session):
-    """Tests export_notion_report inside CopilotToolRegistry."""
+def test_copilot_notion_tool(db_session, monkeypatch):
+    """Tests export_notion_report staging and confirmed execution inside CopilotToolRegistry."""
+    monkeypatch.setattr(settings, "NOTION_SIMULATION_MODE", True)
     ws = Workspace(id="ws_copilot_notion", name="Copilot Notion WS", slug="copilot-notion")
     db_session.add(ws)
     repo = Repository(workspace_id="ws_copilot_notion", name="copilot-repo-notion")
     db_session.add(repo)
     db_session.commit()
 
-    registry = CopilotToolRegistry(db=db_session, workspace_id="ws_copilot_notion", repository_id=repo.id)
+    registry = CopilotToolRegistry(db=db_session, workspace_id="ws_copilot_notion", repository_id=repo.id, user_id="usr_copilot_notion")
 
-    res = registry.export_notion_report(title="Sprint 24 Executive Audit")
+    # 1. Calling tool directly stages a single-use pending action (server gate)
+    staged = registry.export_notion_report(title="Sprint 24 Executive Audit")
+    assert staged["action_required"] == "CONFIRMATION_REQUIRED"
+    assert "action_id" in staged
+
+    # 2. Executing through the confirmation gate executes the staged write
+    res = CopilotToolRegistry.execute_confirmed_action(
+        db=db_session,
+        action_id=staged["action_id"],
+        user_id="usr_copilot_notion",
+        workspace_id="ws_copilot_notion",
+    )
     assert res["status"] == "success"
-    assert "report_id" in res
+    assert "report_id" in res["result"]
 
     # Verify NotionReport record created
     report = db_session.query(NotionReport).filter(NotionReport.workspace_id == "ws_copilot_notion").first()

@@ -34,6 +34,7 @@ from backend.services.code_analyzer import scan_repository_tree
 from backend.services.git_miner import GitMiner
 from backend.services.jira_service import derive_jira_business_signals
 from backend.integrations.jira_provider import JiraProvider
+from backend.config import settings
 from backend.services.priority_service import PriorityService
 from backend.services.recommendation_service import RecommendationService
 

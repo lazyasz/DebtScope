@@ -216,24 +216,30 @@ class JiraProvider(IntegrationProvider):
 
     def fetch_or_simulate_issue(self, issue_key: str) -> Dict[str, Any]:
         """Returns details for a Jira issue key from live API or realistic sandbox fixtures."""
-        clean_key = issue_key.upper().strip()
-        if clean_key in SIMULATED_JIRA_ISSUES:
-            data = SIMULATED_JIRA_ISSUES[clean_key].copy()
-            data["key"] = clean_key
-            return data
+        if not self.is_live_configured():
+            if not getattr(settings, "JIRA_SIMULATION_MODE", False):
+                raise RuntimeError(
+                    "Cannot fetch simulated Jira issue: Jira live credentials are not configured and JIRA_SIMULATION_MODE is False. "
+                    "Simulation data must not be accessed outside explicit simulation mode."
+                )
+            clean_key = issue_key.upper().strip()
+            if clean_key in SIMULATED_JIRA_ISSUES:
+                data = SIMULATED_JIRA_ISSUES[clean_key].copy()
+                data["key"] = clean_key
+                return data
 
-        # Deterministic generation for arbitrary keys
-        is_bug = "BUG" in clean_key or int(''.join(filter(str.isdigit, clean_key)) or 0) % 2 == 1
-        return {
-            "key": clean_key,
-            "summary": f"Telemetry issue for {clean_key}",
-            "issue_type": "Bug" if is_bug else "Task",
-            "priority": "High" if is_bug else "Medium",
-            "status": "In Progress" if is_bug else "Open",
-            "is_bug": is_bug,
-            "sprint_state": "ACTIVE" if is_bug else "FUTURE",
-            "fix_version": "v1.2.0",
-        }
+            # Deterministic generation for arbitrary keys
+            is_bug = "BUG" in clean_key or int(''.join(filter(str.isdigit, clean_key)) or 0) % 2 == 1
+            return {
+                "key": clean_key,
+                "summary": f"Telemetry issue for {clean_key}",
+                "issue_type": "Bug" if is_bug else "Task",
+                "priority": "High" if is_bug else "Medium",
+                "status": "In Progress" if is_bug else "Open",
+                "is_bug": is_bug,
+                "sprint_state": "ACTIVE" if is_bug else "FUTURE",
+                "fix_version": "v1.2.0",
+            }
 
     async def sync_mined_jira_links(
         self,

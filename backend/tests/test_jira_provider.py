@@ -7,6 +7,7 @@ ticket write-back, and Copilot Jira tools.
 import pytest
 import asyncio
 from datetime import datetime, timezone, timedelta
+from backend.config import settings
 from backend.integrations.jira_provider import JiraProvider
 from backend.services.jira_service import (
     parse_jira_keys_from_commit,
@@ -39,8 +40,9 @@ def test_jira_auth_url_generation(jira_provider):
     assert "jira" in url
 
 
-def test_jira_exchange_code_sandbox(jira_provider):
+def test_jira_exchange_code_sandbox(jira_provider, monkeypatch):
     """Tests exchanging code in sandbox mode returns simulated access and refresh tokens."""
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", True)
     res = asyncio.run(jira_provider.exchange_code("jira_mock_auth_code_2026"))
     assert "access_token" in res
     assert "refresh_token" in res
@@ -120,8 +122,9 @@ def test_derive_jira_business_signals_future_task():
     assert signals["has_active_sprint"] is False
 
 
-def test_create_jira_issue_sandbox():
+def test_create_jira_issue_sandbox(monkeypatch):
     """Tests creating a single refactoring ticket."""
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", True)
     data = {
         "component_name": "backend/services/payment.py",
         "priority_score": 88.5,
@@ -140,8 +143,9 @@ def test_create_jira_issue_sandbox():
     assert res["story_points"] == 3
 
 
-def test_bulk_export_to_jira_sandbox():
+def test_bulk_export_to_jira_sandbox(monkeypatch):
     """Tests bulk exporting components to a sprint backlog."""
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", True)
     components = [
         {"component_name": "file_a.py", "priority_score": 92.0, "remediation_effort_hours": 8.0},
         {"component_name": "file_b.py", "priority_score": 65.0, "remediation_effort_hours": 4.0},
@@ -152,8 +156,9 @@ def test_bulk_export_to_jira_sandbox():
     assert res["total_story_points"] == 3  # 2 + 1
 
 
-def test_sync_mined_jira_links(db_session, jira_provider):
+def test_sync_mined_jira_links(db_session, jira_provider, monkeypatch):
     """Tests syncing mined commit links updates BusinessContext and priority scores."""
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", True)
     ws = Workspace(id="ws_jira_test", name="Jira Workspace", slug="jira-test")
     db_session.add(ws)
     repo = Repository(workspace_id="ws_jira_test", name="jira-repo")
@@ -220,8 +225,9 @@ def test_sync_mined_jira_links(db_session, jira_provider):
     assert bctx.customer_impact >= 95.0
 
 
-def test_copilot_jira_tools(db_session):
+def test_copilot_jira_tools(db_session, monkeypatch):
     """Tests create_jira_issue and search_jira_issues inside CopilotToolRegistry."""
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", True)
     ws = Workspace(id="ws_copilot_jira", name="Copilot Jira WS", slug="copilot-jira")
     db_session.add(ws)
     repo = Repository(workspace_id="ws_copilot_jira", name="copilot-repo")
@@ -238,21 +244,31 @@ def test_copilot_jira_tools(db_session):
     db_session.add(f)
     db_session.commit()
 
-    registry = CopilotToolRegistry(db=db_session, workspace_id="ws_copilot_jira", repository_id=repo.id)
+    registry = CopilotToolRegistry(db=db_session, workspace_id="ws_copilot_jira", repository_id=repo.id, user_id="usr_copilot")
 
-    # 1. Create Jira issue via Copilot tool
+    # 1. Create Jira issue via Copilot tool returns single-use staged action
     create_res = registry.create_jira_issue(
         file_path_or_id="src/gateway.py",
         summary="Refactor gateway timeout handler",
         issue_type="Task"
     )
-    assert "issue_key" in create_res
-    assert create_res["status"] == "success"
+    assert create_res.get("action_required") == "CONFIRMATION_REQUIRED"
+    action_id = create_res["action_id"]
 
-    # 2. Search Jira issues via Copilot tool
+    # 2. Confirm and execute staged action via server endpoint helper
+    exec_res = CopilotToolRegistry.execute_confirmed_action(
+        db=db_session,
+        action_id=action_id,
+        user_id="usr_copilot",
+        workspace_id="ws_copilot_jira"
+    )
+    assert exec_res["status"] == "success"
+    assert "issue_key" in exec_res["result"]
+
+    # 3. Search Jira issues via Copilot tool
     search_res = registry.search_jira_issues(file_path_or_id="src/gateway.py")
     assert search_res["total_count"] >= 1
-    assert search_res["issues"][0]["issue_key"] == create_res["issue_key"]
+    assert search_res["issues"][0]["issue_key"] == exec_res["result"]["issue_key"]
 
 
 def test_parse_jira_keys_rejects_cve_sha_utf8_rfc():
@@ -330,4 +346,40 @@ def test_derive_jira_business_signals_dynamic_release_proximity():
     ])
     assert signals_distant["release_proximity"] == 50.0
     assert signals_distant["sprint_urgency"] == 55.0
+
+
+def test_simulation_isolation_refuses_fixtures_outside_simulation_mode(monkeypatch):
+    """
+    Amendment A: With Jira not connected and JIRA_SIMULATION_MODE=False:
+    1. Direct call to fetch_or_simulate_issue MUST raise RuntimeError.
+    2. Git commit parsing skips key extraction (zero Jira keys extracted).
+    3. No fixture data can reach business context or priority score.
+    """
+    from backend.config import settings
+    from backend.integrations.jira_provider import JiraProvider
+    from backend.services.git_miner import GitMiner
+
+    monkeypatch.setattr(settings, "JIRA_SIMULATION_MODE", False)
+    provider = JiraProvider()
+    monkeypatch.setattr(provider, "is_live_configured", lambda: False)
+
+    # 1. Direct call to fetch_or_simulate_issue raises RuntimeError
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.fetch_or_simulate_issue("DEBT-101")
+    assert "JIRA_SIMULATION_MODE is False" in str(exc_info.value)
+
+    # 2. GitMiner skips commit-key extraction when Jira is disabled
+    miner = GitMiner(repo_dir=".")
+    assert miner._is_jira_enabled() is False
+
+    # 3. Simulate parsing commits - even if commit message has [DEBT-999], zero keys extracted
+    sample_log = "COMMIT_SEP|abc1234|Dev|1700000000|feat(core): fix login crash [DEBT-999]\n10\t2\tsrc/core/login.py"
+    monkeypatch.setattr(miner, "_run_git", lambda *a, **kw: sample_log)
+    stats = miner.mine_file_history()
+    assert "src/core/login.py" in stats
+    assert stats["src/core/login.py"]["jira_keys"] == []
+
+    # 4. mine_jira_commit_links returns empty list immediately
+    assert miner.mine_jira_commit_links() == []
+
 

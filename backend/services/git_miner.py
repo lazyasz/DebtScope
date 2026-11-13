@@ -29,6 +29,12 @@ class GitMiner:
     def __init__(self, repo_dir: str):
         self.repo_dir = repo_dir
 
+    def _is_jira_enabled(self) -> bool:
+        """Returns True if Jira is live-configured or explicit JIRA_SIMULATION_MODE is enabled."""
+        from backend.config import settings
+        from backend.integrations.jira_provider import JiraProvider
+        return JiraProvider().is_live_configured() or getattr(settings, "JIRA_SIMULATION_MODE", False)
+
     def _run_git(self, args: List[str], timeout: int = 60) -> str:
         """Executes a git command inside the target repo directory."""
         cmd = ["git"] + args
@@ -84,6 +90,7 @@ class GitMiner:
 
         file_stats: Dict[str, Dict[str, Any]] = {}
         now_ts = int(datetime.now(timezone.utc).timestamp())
+        jira_enabled = self._is_jira_enabled()
 
         current_commit_hash = ""
         current_author = "Unknown"
@@ -108,7 +115,7 @@ class GitMiner:
                     raw_subject = parts[4].strip()
                     subject_lower = raw_subject.lower()
                     current_is_fix = any(k in subject_lower for k in BUG_FIX_KEYWORDS)
-                    current_jira_keys = parse_jira_keys_from_commit(raw_subject)
+                    current_jira_keys = parse_jira_keys_from_commit(raw_subject) if jira_enabled else []
                 continue
 
             # Numstat line: <added> \t <removed> \t <filepath>
@@ -199,18 +206,11 @@ class GitMiner:
     def mine_jira_commit_links(self) -> List[Dict[str, Any]]:
         """
         Parses commit history to extract Jira issue keys and mapped files.
-        Returns a list of dicts:
-        [
-            {
-                "commit_hash": str,
-                "author": str,
-                "timestamp": datetime,
-                "subject": str,
-                "jira_keys": List[str],
-                "files": List[str]
-            }
-        ]
+        Only runs when Jira is live-configured or simulation mode is explicitly enabled.
         """
+        if not self._is_jira_enabled():
+            return []
+
         log_raw = self._run_git([
             "log",
             "--name-only",

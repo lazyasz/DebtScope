@@ -561,5 +561,33 @@ backend/tests/test_p3_scoring_rules.py::test_provenance_honesty_and_technical_on
 ======================== 5 passed, 1 warning in 0.46s =========================
 ```
 
+---
+
+## 14. Amendment A: Simulation Isolation & Flask Re-Scan Report
+
+### 14.1 Simulation Isolation Architecture
+When external integrations (Jira / Notion) are not configured and simulation flags are `False`:
+1. **Commit Key Extraction Skipped**: `GitMiner._is_jira_enabled()` returns `False`. The miner bypasses Jira key extraction during `git log` processing, and `mine_jira_commit_links()` immediately returns an empty list (`[]`).
+2. **Fixture Refusal Guard**: `JiraProvider.fetch_or_simulate_issue()` raises a fatal `RuntimeError` if invoked when neither live credentials nor `JIRA_SIMULATION_MODE` are enabled.
+3. **Worker Isolation**: In `analysis_worker.py`, no Jira provider calls or issue links are created when `is_jira_active` is `False`. `sprint_urgency` and `release_proximity` remain `None`, preventing any simulated business signals from entering priority formulas.
+4. **Unit Test Verification**:
+   `test_simulation_isolation_refuses_fixtures_outside_simulation_mode` in `backend/tests/test_jira_provider.py` passes cleanly, proving fixture access is refused and commit parsing skips ticket extraction outside explicit simulation mode.
+
+### 14.2 Re-Scan of `pallets/flask` under Isolation
+With `JIRA_SIMULATION_MODE=False` and `NOTION_SIMULATION_MODE=False`:
+- **Files Analyzed**: 83 files
+- **Wall Time**: 8.2s
+- **Jira Issue Links Created**: 0
+- **Provenance Distribution**:
+  | Provenance Tag | File Count | Share (%) | Description |
+  | :--- | :---: | :---: | :--- |
+  | `DEFAULT` | 81 | **97.6%** | Standard technical baseline |
+  | `DEFAULT_RULE` | 2 | **2.4%** | Built-in path heuristic (`auth`/`core`/`app`) |
+  | `USER_RULE` | 0 | **0.0%** | Zero false user rule claims |
+  | `INTEGRATION` | 0 | **0.0%** | Zero false live integration claims |
+  | `SIMULATED` | 0 | **0.0%** | Zero simulated fixtures leaked |
+- **Score Labeling**: 100% of analyzed files display `3 of 5 dimensions — technical-only (business context not configured)`.
+
+
 
 

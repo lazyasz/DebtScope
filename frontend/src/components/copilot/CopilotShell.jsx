@@ -36,6 +36,8 @@ export default function CopilotShell() {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [activeTool, setActiveTool] = useState(null);
+  const [executingAction, setExecutingAction] = useState(null);
+  const [actionResults, setActionResults] = useState({});
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -282,6 +284,69 @@ export default function CopilotShell() {
                 ) : (
                   <div className="whitespace-pre-wrap">{renderMessageContent(msg.text)}</div>
                 )}
+
+                {/* Action Confirmation Gate Widget */}
+                {(() => {
+                  const match = msg.text?.match(/act_[a-f0-9]{32}/);
+                  if (!match) return null;
+                  const actionId = match[0];
+                  const isExecuting = executingAction === actionId;
+                  const outcome = actionResults[actionId];
+
+                  return (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          <span>Explicit Authorization Required</span>
+                        </div>
+                        <span className="font-mono text-[10px] text-amber-700">{actionId}</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">
+                        This operation modifies external workspace resources. Click below to verify and execute this single-use action.
+                      </p>
+                      {outcome ? (
+                        <div className={`p-2 rounded text-xs font-mono font-bold ${outcome.success ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                          {outcome.message}
+                        </div>
+                      ) : (
+                        <button
+                          disabled={isExecuting}
+                          onClick={async () => {
+                            setExecutingAction(actionId);
+                            try {
+                              const res = await fetch(`${API_BASE_URL}/api/v1/copilot/actions/${actionId}/confirm`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                              });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.detail || 'Confirmation failed');
+                              setActionResults((prev) => ({
+                                ...prev,
+                                [actionId]: {
+                                  success: true,
+                                  message: `✅ Action executed: ${data.result?.issue_key || data.result?.page_url || 'Success'}`,
+                                },
+                              }));
+                            } catch (err) {
+                              setActionResults((prev) => ({
+                                ...prev,
+                                [actionId]: { success: false, message: `❌ Error: ${err.message}` },
+                              }));
+                            } finally {
+                              setExecutingAction(null);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-mono text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-50"
+                        >
+                          {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          <span>Confirm & Execute Write Action</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* AST Refactoring Diff Viewer */}
                 {msg.refactorDiff && (

@@ -100,7 +100,7 @@ async def chat_copilot(
     history = [{"role": m.role, "content": m.content} for m in prev_messages]
 
     # 4. Initialize Tenant-Scoped Tool Registry
-    tool_registry = CopilotToolRegistry(db=db, workspace_id=workspace_id, repository_id=repo_id)
+    tool_registry = CopilotToolRegistry(db=db, workspace_id=workspace_id, repository_id=repo_id, user_id=user_id)
     llm = get_copilot_llm()
 
     async def event_generator():
@@ -246,3 +246,31 @@ def get_conversation_messages(
         }
         for m in conv.messages
     ]
+
+
+class ConfirmActionPayload(BaseModel):
+    arguments: Optional[Dict[str, Any]] = None
+
+
+@router.post("/actions/{action_id}/confirm", summary="Confirm and Execute Staged Copilot Write Action")
+def confirm_action(
+    action_id: str,
+    payload: Optional[ConfirmActionPayload] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    """
+    Dedicated user-authenticated endpoint to execute a staged single-use write action.
+    Strictly verifies user ownership, workspace tenant boundaries, action status, expiry,
+    and arguments hash matching. The AI model cannot call or spoof this endpoint.
+    """
+    client_args = payload.arguments if payload else None
+    return CopilotToolRegistry.execute_confirmed_action(
+        db=db,
+        action_id=action_id,
+        user_id=user.id,
+        workspace_id=workspace.id,
+        client_arguments=client_args,
+    )
+

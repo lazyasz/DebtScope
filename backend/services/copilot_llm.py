@@ -141,29 +141,23 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
                 yield CopilotStreamEvent("done", {"grounded": True, "refusal": True, "blocked_write": True})
                 return
 
-            # Check if explicit confirmation is present
-            is_confirmed = any(c in q for c in ["i confirm", "confirmed: true", "yes, proceed", "confirm export", "confirm create", "approved by user"]) or (q.strip() in ["confirm", "yes", "approve"])
             if "jira" in q:
                 file_match = re.search(r'([\w/\.\-]+\.(?:py|js|ts|java|go|cpp|cs))', last_msg)
                 target = file_match.group(1) if file_match else "services/payment.py"
-                tool_res = tool_registry.execute_tool("create_jira_issue", {"file_path_or_id": target, "confirmed": is_confirmed})
-                yield CopilotStreamEvent("tool_call", {"tool": "create_jira_issue", "args": {"file_path_or_id": target, "confirmed": is_confirmed}})
+                tool_res = tool_registry.execute_tool("create_jira_issue", {"file_path_or_id": target})
+                yield CopilotStreamEvent("tool_call", {"tool": "create_jira_issue", "args": {"file_path_or_id": target}})
                 yield CopilotStreamEvent("tool_result", {"tool": "create_jira_issue", "result": tool_res})
-                if tool_res.get("action_required") == "CONFIRMATION_REQUIRED":
-                    yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: {tool_res.get('message', 'User confirmation required before creating Jira ticket.')}")
-                else:
-                    yield CopilotStreamEvent("token", f"✅ Created Jira ticket `{tool_res.get('issue_key')}` for refactoring.")
-                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": not is_confirmed})
+                act_id = tool_res.get("action_id", "act_unknown")
+                yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: Action staged as `{act_id}`. Please confirm in the UI to proceed with creating Jira ticket.")
+                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": True, "action_id": act_id})
                 return
             elif "notion" in q:
-                tool_res = tool_registry.execute_tool("export_notion_report", {"title": "Executive Technical Debt Audit", "confirmed": is_confirmed})
-                yield CopilotStreamEvent("tool_call", {"tool": "export_notion_report", "args": {"title": "Executive Technical Debt Audit", "confirmed": is_confirmed}})
+                tool_res = tool_registry.execute_tool("export_notion_report", {"title": "Executive Technical Debt Audit"})
+                yield CopilotStreamEvent("tool_call", {"tool": "export_notion_report", "args": {"title": "Executive Technical Debt Audit"}})
                 yield CopilotStreamEvent("tool_result", {"tool": "export_notion_report", "result": tool_res})
-                if tool_res.get("action_required") == "CONFIRMATION_REQUIRED":
-                    yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: {tool_res.get('message', 'User confirmation required before exporting to Notion.')}")
-                else:
-                    yield CopilotStreamEvent("token", f"✅ Exported executive report to Notion: {tool_res.get('page_url')}")
-                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": not is_confirmed})
+                act_id = tool_res.get("action_id", "act_unknown")
+                yield CopilotStreamEvent("token", f"🛑 **Confirmation Required**: Action staged as `{act_id}`. Please confirm in the UI to proceed with exporting to Notion.")
+                yield CopilotStreamEvent("done", {"grounded": True, "confirmation_required": True, "action_id": act_id})
                 return
 
         # 2. Missing Data Honesty / File Detail

@@ -416,3 +416,60 @@ As documented in `docs/COPILOT_EVAL.md`:
    - LLM API Key (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) is pending teammate delivery; Copilot benchmark ran on the deterministic grounded stub.
 4. **Temporal Backtest Baseline**:
    - Precision@3 on `pallets/flask` was 0.0% over a 90-day window because the recent 5 commits touched documentation and tutorial files rather than core library code; historical validation confirms correct git diff extraction.
+
+---
+
+# Verification Round 2: Quality Pass (`fix/quality-pass`)
+
+## 11. Item 1: Copilot Confirmation Gate & Single-Use Staged Actions
+
+### 11.1 Analysis of Previous Implementation (`confirmed` origin)
+In the previous implementation, `confirmed: bool` was exposed in `COPILOT_TOOL_SCHEMAS` and inspected via `arguments.get("confirmed")` inside `CopilotToolRegistry.execute_tool()`. This allowed an LLM model or prompt injection to synthesize `args: {"confirmed": true}` and bypass the gate directly.
+
+### 11.2 Hardened Architecture
+1. **Schema & Model De-coupling**: Removed `confirmed` from `COPILOT_TOOL_SCHEMAS`. The model cannot see, request, or pass confirmation.
+2. **Pending Actions Staging**: Write tools (`create_jira_issue`, `export_notion_report`) never execute when invoked via `execute_tool`. Instead, they call `stage_pending_action()`, which records a `PendingAction` in the database with:
+   - Server-generated single-use ID (`act_<uuid4>`).
+   - Strict binding to `(user_id, workspace_id, tool_name)`.
+   - Canonical SHA-256 hash of arguments (`arguments_hash`).
+   - Expiration timestamp (15 minutes).
+   - Initial status `"PENDING"`.
+3. **Dedicated User Endpoint**: Only `POST /api/v1/copilot/actions/{action_id}/confirm`, authenticated as the user via session/cookie, can execute the staged action.
+4. **Server-Side Verification**:
+   - Forged action ID $\rightarrow$ `HTTP 404`.
+   - Cross-user or cross-workspace access $\rightarrow$ `HTTP 403`.
+   - Tampered arguments (hash mismatch) $\rightarrow$ `HTTP 400`.
+   - Expired action $\rightarrow$ `HTTP 400`.
+   - Replay / double confirm $\rightarrow$ `HTTP 400` (single-use enforced; status transitioned to `"EXECUTED"`).
+5. **Interactive UI Button**: Frontend `CopilotShell.jsx` detects staged `act_*` IDs and displays a dedicated "Confirm & Execute Write Action" button calling the authenticated endpoint.
+
+### 11.3 Test Evidence
+```powershell
+py -m pytest backend/tests/test_copilot_confirmation_gate.py -v
+```
+Output:
+```
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\dhruv\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collecting ... collected 13 items
+
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_create_jira_issue_stages_pending_action PASSED [  7%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_export_notion_report_stages_pending_action PASSED [ 15%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_model_supplied_confirmed_true_is_blocked_and_staged PASSED [ 23%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_forged_action_id PASSED [ 30%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_user_id PASSED [ 38%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_other_workspace_id PASSED [ 46%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_altered_arguments PASSED [ 53%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_rejects_expired_action PASSED [ 61%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_confirm_endpoint_executes_and_enforces_single_use PASSED [ 69%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotConfirmationGate::test_notion_confirm_endpoint_executes_and_enforces_single_use PASSED [ 76%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_commit_message_refused PASSED [ 84%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_jira_summary_refused PASSED [ 92%]
+backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResistance::test_injected_notion_page_refused PASSED [100%]
+
+======================== 13 passed, 1 warning in 0.80s ========================
+```
+

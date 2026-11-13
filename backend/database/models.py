@@ -364,4 +364,26 @@ class NotionReport(Base):
     exported_at = Column(DateTime, default=utc_now)
 
 
+class PendingAction(Base):
+    """
+    Server-generated single-use pending write action.
+    Binds write execution strictly to user_id, workspace_id, tool_name, and SHA-256 arguments hash.
+    Can ONLY be confirmed via dedicated user-authenticated API endpoint with expiry check.
+    """
+    __tablename__ = "pending_actions"
+
+    id = Column(String(100), primary_key=True, index=True)  # act_<uuid4>
+    workspace_id = Column(String(100), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(100), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tool_name = Column(String(50), nullable=False)
+    arguments_json = Column(Text, nullable=False)
+    arguments_hash = Column(String(64), nullable=False)  # SHA-256 of canonical arguments JSON
+    status = Column(String(20), default="PENDING", index=True)  # PENDING, EXECUTED, EXPIRED, CANCELLED
+    result_json = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+    executed_at = Column(DateTime, nullable=True)
+
+
+
 

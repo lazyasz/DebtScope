@@ -6,7 +6,11 @@ server-side by the caller session and are NEVER accepted as model-supplied argum
 
 import os
 import json
+import uuid
+import hashlib
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Union
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from backend.database.models import (
@@ -17,6 +21,7 @@ from backend.database.models import (
     TechnicalDebtItem,
     JiraIssueLink,
     NotionReport,
+    PendingAction,
 )
 from backend.services.priority_service import PriorityService
 from backend.services.ast_verifier import ASTVerifier
@@ -108,14 +113,13 @@ COPILOT_TOOL_SCHEMAS = [
     },
     {
         "name": "create_jira_issue",
-        "description": "Creates a Jira refactoring ticket for a prioritized technical debt component. Requires confirmed=true server-side gate.",
+        "description": "Stages a Jira refactoring ticket for a prioritized technical debt component. Write execution is staged and requires explicit user confirmation via dedicated endpoint.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path_or_id": {"type": "string", "description": "Target file to create ticket for"},
                 "summary": {"type": "string", "description": "Optional custom summary/title for the ticket"},
                 "issue_type": {"type": "string", "enum": ["Task", "Bug", "Story"], "description": "Issue type (default: Task)"},
-                "confirmed": {"type": "boolean", "description": "Explicit user confirmation flag required to execute the write."},
             },
             "required": ["file_path_or_id"],
         },
@@ -133,12 +137,11 @@ COPILOT_TOOL_SCHEMAS = [
     },
     {
         "name": "export_notion_report",
-        "description": "Exports an executive technical debt report and sprint ROI matrix into the connected Notion workspace. Requires confirmed=true server-side gate.",
+        "description": "Stages an executive technical debt report and sprint ROI matrix export into the connected Notion workspace. Write execution is staged and requires explicit user confirmation via dedicated endpoint.",
         "parameters": {
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Optional custom report title"},
-                "confirmed": {"type": "boolean", "description": "Explicit user confirmation flag required to execute the write."},
             },
         },
     },
@@ -151,10 +154,49 @@ class CopilotToolRegistry:
     Workspace ID is enforced from the server session context.
     """
 
-    def __init__(self, db: Session, workspace_id: str, repository_id: Optional[int] = None):
+    def __init__(self, db: Session, workspace_id: str, repository_id: Optional[int] = None, user_id: Optional[str] = None):
         self.db = db
         self.workspace_id = workspace_id
         self.repository_id = repository_id
+        self.user_id = user_id
+
+    def stage_pending_action(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Creates a server-generated single-use pending write action bound to
+        (user, workspace, tool, hash of exact arguments) with expiry.
+        The model cannot set or see confirmation.
+        """
+        clean_args = {k: v for k, v in arguments.items() if k not in ("confirmed", "action_id")}
+        canonical_json = json.dumps(clean_args, sort_keys=True)
+        arguments_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+        action_id = f"act_{uuid.uuid4().hex}"
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+        pending = PendingAction(
+            id=action_id,
+            workspace_id=self.workspace_id,
+            user_id=self.user_id or "usr_anonymous",
+            tool_name=tool_name,
+            arguments_json=canonical_json,
+            arguments_hash=arguments_hash,
+            status="PENDING",
+            expires_at=expires_at,
+        )
+        self.db.add(pending)
+        self.db.commit()
+
+        return {
+            "action_required": "CONFIRMATION_REQUIRED",
+            "gate": "server_side_confirmation_gate",
+            "action_id": action_id,
+            "tool_name": tool_name,
+            "arguments_hash": arguments_hash,
+            "expires_at": expires_at.isoformat(),
+            "message": (
+                f"Write action '{tool_name}' staged under single-use ID '{action_id}'. "
+                f"Execution requires explicit confirmation via POST /api/v1/copilot/actions/{action_id}/confirm."
+            ),
+        }
 
     def _resolve_file(self, file_path_or_id: Union[str, int]) -> Optional[SourceFile]:
         """Resolves file scoped strictly to the current workspace."""
@@ -492,24 +534,37 @@ class CopilotToolRegistry:
         file_path_or_id: Union[str, int],
         summary: Optional[str] = None,
         issue_type: str = "Task",
-        confirmed: Optional[bool] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
-        """Creates a Jira refactoring ticket for a file within tenant boundaries."""
+        """
+        Stages a Jira refactoring ticket for a file within tenant boundaries.
+        Returns a single-use pending action requiring user confirmation.
+        The model cannot execute this write directly.
+        """
         file_obj = self._resolve_file(file_path_or_id)
         if not file_obj:
             return {"error": f"File '{file_path_or_id}' not found in current workspace."}
 
-        # Server-side confirmation gate: if explicitly False, held pending confirmation
-        if confirmed is False:
-            return {
-                "action_required": "CONFIRMATION_REQUIRED",
-                "gate": "server_side_confirmation_gate",
-                "tool": "create_jira_issue",
-                "file_path": file_obj.file_path,
-                "summary": summary or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}",
-                "issue_type": issue_type,
-                "message": f"Action 'create_jira_issue' held: server-side confirmation required (confirmed=true).",
-            }
+        raw_args = {
+            "file_path_or_id": file_obj.file_path,
+            "summary": summary or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}",
+            "issue_type": issue_type,
+        }
+        staged = self.stage_pending_action("create_jira_issue", raw_args)
+        staged["file_path"] = file_obj.file_path
+        staged["summary"] = raw_args["summary"]
+        staged["issue_type"] = issue_type
+        return staged
+
+    def _execute_create_jira_issue_internal(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal execution helper for confirmed Jira write action."""
+        file_path_or_id = args.get("file_path_or_id")
+        file_obj = self._resolve_file(file_path_or_id)
+        if not file_obj:
+            raise HTTPException(status_code=404, detail=f"File '{file_path_or_id}' not found in workspace.")
+
+        summary = args.get("summary") or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}"
+        issue_type = args.get("issue_type", "Task")
 
         ps = file_obj.priority_score
         bctx = file_obj.business_context
@@ -523,15 +578,14 @@ class CopilotToolRegistry:
             "technical_risk": ps.composite_technical_risk if ps else 70.0,
             "business_impact": ps.composite_business_impact if ps else 65.0,
             "roi_quadrant": ps.quadrant if ps else "Strategic Refactoring",
-            "summary": summary or f"[Tech Debt] Refactor high-risk component: {file_obj.file_name}",
+            "summary": summary,
             "issue_type": issue_type,
         }
 
         import asyncio
-        from backend.services.jira_service import create_jira_issue
-        res = asyncio.run(create_jira_issue(payload))
+        from backend.services.jira_service import create_jira_issue as jira_create_fn
+        res = asyncio.run(jira_create_fn(payload))
 
-        # Save JiraIssueLink record
         link = JiraIssueLink(
             workspace_id=self.workspace_id,
             file_id=file_obj.id,
@@ -577,17 +631,22 @@ class CopilotToolRegistry:
             "total_count": len(links),
         }
 
-    def export_notion_report(self, title: Optional[str] = None, confirmed: Optional[bool] = None) -> Dict[str, Any]:
-        """Exports technical debt audit report to Notion."""
-        # Server-side confirmation gate: if explicitly False, held pending confirmation
-        if confirmed is False:
-            return {
-                "action_required": "CONFIRMATION_REQUIRED",
-                "gate": "server_side_confirmation_gate",
-                "tool": "export_notion_report",
-                "title": title or "Executive Technical Debt & ROI Audit",
-                "message": f"Action 'export_notion_report' held: server-side confirmation required (confirmed=true).",
-            }
+    def export_notion_report(self, title: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        """
+        Stages technical debt audit report export to Notion.
+        Returns a single-use pending action requiring user confirmation.
+        The model cannot execute this write directly.
+        """
+        raw_args = {
+            "title": title or "Executive Technical Debt & ROI Audit",
+        }
+        staged = self.stage_pending_action("export_notion_report", raw_args)
+        staged["title"] = raw_args["title"]
+        return staged
+
+    def _execute_export_notion_report_internal(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal execution helper for confirmed Notion export write action."""
+        title = args.get("title") or "Executive Technical Debt & ROI Audit"
 
         import asyncio
         from backend.services.notion_service import create_notion_audit_report
@@ -596,7 +655,7 @@ class CopilotToolRegistry:
         report = NotionReport(
             workspace_id=self.workspace_id,
             notion_page_id=res.get("page_id", "notion_page_mock"),
-            title=title or "Executive Technical Debt & ROI Audit",
+            title=title,
             total_debt_hours=float(res.get("total_debt_hours", 42.0)),
             top_debt_items_count=int(res.get("top_items_count", 5)),
             report_url=res.get("page_url", "https://notion.so/debtscope/audit"),
@@ -606,26 +665,80 @@ class CopilotToolRegistry:
         self.db.commit()
         return res
 
+    @classmethod
+    def execute_confirmed_action(
+        cls,
+        db: Session,
+        action_id: str,
+        user_id: str,
+        workspace_id: str,
+        client_arguments: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Strict server-side verification and single-use execution of a staged pending write action.
+        Only dedicated, authenticated user endpoint can call this.
+        """
+        action = db.query(PendingAction).filter(PendingAction.id == action_id).first()
+        if not action:
+            raise HTTPException(status_code=404, detail=f"Pending action '{action_id}' not found.")
+
+        if action.workspace_id != workspace_id or action.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Permission denied: pending action belongs to a different workspace or user.")
+
+        if action.status != "PENDING":
+            raise HTTPException(status_code=400, detail=f"Action '{action_id}' cannot be executed: status is {action.status}.")
+
+        now_utc = datetime.now(timezone.utc)
+        exp = action.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if now_utc > exp:
+            action.status = "EXPIRED"
+            db.commit()
+            raise HTTPException(status_code=400, detail=f"Action '{action_id}' has expired.")
+
+        staged_args = json.loads(action.arguments_json)
+        if client_arguments is not None:
+            clean_client = {k: v for k, v in client_arguments.items() if k not in ("confirmed", "action_id")}
+            client_hash = hashlib.sha256(json.dumps(clean_client, sort_keys=True).encode("utf-8")).hexdigest()
+            if client_hash != action.arguments_hash:
+                raise HTTPException(status_code=400, detail="Action arguments hash mismatch: arguments have been altered.")
+
+        registry = cls(db=db, workspace_id=workspace_id, user_id=user_id)
+        if action.tool_name == "create_jira_issue":
+            result = registry._execute_create_jira_issue_internal(staged_args)
+        elif action.tool_name == "export_notion_report":
+            result = registry._execute_export_notion_report_internal(staged_args)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported tool action: {action.tool_name}")
+
+        action.status = "EXECUTED"
+        action.executed_at = now_utc
+        action.result_json = json.dumps(result)
+        db.commit()
+
+        return {
+            "status": "success",
+            "action_id": action_id,
+            "tool_name": action.tool_name,
+            "result": result,
+        }
+
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Dispatches tool call safely with server-side confirmation gate."""
+        """
+        Dispatches tool call safely.
+        Write operations always return a staged pending action with server-generated ID.
+        The model cannot execute writes directly or bypass confirmation.
+        """
         handler = getattr(self, tool_name, None)
         if not handler or not callable(handler) or tool_name.startswith("_"):
             return {"error": f"Unknown tool: '{tool_name}'"}
 
-        # Server-side write confirmation gate on external modifying operations
-        if tool_name in ("create_jira_issue", "export_notion_report"):
-            is_confirmed = arguments.get("confirmed") is True
-            if not is_confirmed:
-                return {
-                    "action_required": "CONFIRMATION_REQUIRED",
-                    "gate": "server_side_confirmation_gate",
-                    "tool": tool_name,
-                    "arguments": arguments,
-                    "message": f"Write action '{tool_name}' requires explicit user confirmation. Blocked on server.",
-                }
+        # Sanitize arguments: strip any model-supplied confirmation or bypass attempts
+        sanitized_args = {k: v for k, v in arguments.items() if k not in ("confirmed", "bypass_confirmation")}
 
         try:
-            return handler(**arguments)
+            return handler(**sanitized_args)
         except TypeError as e:
             return {"error": f"Invalid arguments for '{tool_name}': {str(e)}"}
         except Exception as e:

@@ -686,6 +686,14 @@ class CopilotToolRegistry:
         if action.workspace_id != workspace_id or action.user_id != user_id:
             raise HTTPException(status_code=403, detail="Permission denied: pending action belongs to a different workspace or user.")
 
+        # Verify cryptographic integrity of arguments against server-generated hash
+        computed_hash = hashlib.sha256(action.arguments_json.encode("utf-8")).hexdigest()
+        if computed_hash != action.arguments_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="Action payload integrity violation: arguments have been altered."
+            )
+
         if action.status != "PENDING":
             raise HTTPException(status_code=400, detail=f"Action '{action_id}' cannot be executed: status is {action.status}.")
 

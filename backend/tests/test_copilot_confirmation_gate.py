@@ -23,6 +23,7 @@ os.environ.setdefault("DEV_SANDBOX_AUTH", "True")
 os.environ.setdefault("ENVIRONMENT", "development")
 
 import asyncio
+import json
 import pytest
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
@@ -261,6 +262,41 @@ class TestCopilotConfirmationGate:
             assert data["tool_name"] == "create_jira_issue"
             assert data["arguments"]["file_path_or_id"] == "src/payments/billing.py"
             assert data["status"] == "PENDING"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_confirm_endpoint_rejects_altered_arguments(self, test_env):
+        """Altered arguments or tampered payload hash must be rejected with 400 Bad Request."""
+        from fastapi.testclient import TestClient
+        from backend.main import app
+        from backend.database.connection import get_db
+        from backend.database.tenant import get_current_user, get_current_workspace
+
+        registry = test_env["registry"]
+        db = test_env["db"]
+        user = db.query(User).filter_by(id="usr_gate").first()
+        ws = db.query(Workspace).filter_by(id="ws_gate_test").first()
+
+        staged = registry.create_jira_issue("src/payments/billing.py", summary="Original summary")
+        action_id = staged["action_id"]
+
+        # Simulate tampering with the database arguments_json without updating arguments_hash
+        pending = db.query(PendingAction).filter_by(id=action_id).first()
+        pending.arguments_json = json.dumps({"file_path_or_id": "src/payments/billing.py", "summary": "MALICIOUSLY_ALTERED_PAYLOAD"})
+        db.commit()
+
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_current_workspace] = lambda: ws
+
+        try:
+            client = TestClient(app)
+            res = client.post(
+                f"/api/v1/copilot/actions/{action_id}/confirm",
+                headers={"Origin": "http://localhost:5173"}
+            )
+            assert res.status_code == 400
+            assert "integrity violation" in res.json().get("detail", "").lower()
         finally:
             app.dependency_overrides.clear()
 

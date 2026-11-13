@@ -48,8 +48,9 @@ export async function getHotspots() {
   return data;
 }
 
-export async function getPriorities() {
-  const { data } = await apiClient.get('/api/priorities');
+export async function getPriorities(category = 'source') {
+  const params = category ? { category } : {};
+  const { data } = await apiClient.get('/api/priorities', { params });
   return data;
 }
 

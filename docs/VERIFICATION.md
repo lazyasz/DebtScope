@@ -829,3 +829,107 @@ AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 
 
+
+
+---
+
+## 20. Item 4: File Classification & Segregation of Non-Source Files
+
+### 20.1 Implementation Overview
+DebtScope now performs automated multi-category file classification during static analysis:
+- **Taxonomy**:
+  - `source`: Production code (`.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.go`, `.java`, etc. excluding test/build/vendor/mock paths)
+  - `test`: Unit, integration, e2e, acceptance, mock, and fixture files (`tests/`, `test/`, `spec/`, `conftest.py`, `*_test.py`, `*.spec.js`, etc.)
+  - `docs`: Documentation files (`docs/`, `*.md`, `*.rst`, `conf.py`, etc.)
+  - `config`: Tooling, linters, CI/CD, project config (`package.json`, `tsconfig.json`, `setup.py`, `pyproject.toml`, `tox.ini`, `pytest.ini`, `.eslintrc`, etc.)
+  - `generated`: Auto-generated code (`migrations/`, `protobuf`, `dist/`, `build/`, `*.min.js`, etc.)
+  - `vendored`: Third-party dependencies committed in repo (`vendor/`, `node_modules/`, `third_party/`, etc.)
+  - `build`: Build automation scripts (`Dockerfile`, `Makefile`, `webpack.config.js`, `vite.config.js`, etc.)
+
+- **Database & Architecture**:
+  - `SourceFile.file_category` (indexed string) populated during worker ingestion and analysis.
+  - Alembic migration `e3f4a5b6c7d8_add_file_category_and_pending_actions.py` applied.
+  - `PriorityService.get_ranked_priorities` filters `file_category == 'source'` by default. Dedicated views supported for `category='non_source'`, `category='all'`, or specific category strings.
+  - REST API `GET /api/priorities?category=source` (default) with options for `non_source`, `all`, `test`, `docs`, `config`.
+  - Frontend UI filter pills added to `Priorities.jsx`: `Production Source (Default)`, `Non-Source View`, `Tests`, `Docs`, `Build / Config`, `All Files`.
+
+### 20.2 Test Suite Verification
+```text
+$ py -m pytest backend/tests/test_code_analyzer.py backend/tests/test_p3_scoring_rules.py
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collected 11 items
+
+backend\tests\test_code_analyzer.py .....                                [ 45%]
+backend\tests\test_p3_scoring_rules.py ......                            [100%]
+
+======================== 11 passed, 1 warning in 0.70s ========================
+```
+
+### 20.3 Re-Scan Telemetry: `pallets/flask` & `expressjs/express`
+```text
+=== Scanning pallets/flask ===
+Wall time: 9.96s | Files analyzed: 83
+Category breakdown: {'docs': 1, 'source': 33, 'test': 49}
+
+--- NEW TOP 10 (Production Source Only) ---
+1. src/flask/app.py | Score: 66.32 | QUICK_WIN | Defect Prob: 56.0% | Risk: 57.5 | Category: source
+2. src/flask/cli.py | Score: 64.88 | QUICK_WIN | Defect Prob: 52.6% | Risk: 54.0 | Category: source
+3. src/flask/helpers.py | Score: 64.44 | QUICK_WIN | Defect Prob: 46.2% | Risk: 47.4 | Category: source
+4. src/flask/blueprints.py | Score: 60.60 | OPPORTUNISTIC | Defect Prob: 33.6% | Risk: 34.5 | Category: source
+5. src/flask/sansio/app.py | Score: 58.80 | OPPORTUNISTIC | Defect Prob: 34.1% | Risk: 35.0 | Category: source
+6. src/flask/sansio/scaffold.py | Score: 51.15 | OPPORTUNISTIC | Defect Prob: 21.6% | Risk: 22.1 | Category: source
+7. src/flask/__init__.py | Score: 50.75 | OPPORTUNISTIC | Defect Prob: 26.9% | Risk: 27.6 | Category: source
+8. src/flask/ctx.py | Score: 50.17 | OPPORTUNISTIC | Defect Prob: 25.0% | Risk: 25.6 | Category: source
+9. src/flask/sansio/blueprints.py | Score: 50.12 | OPPORTUNISTIC | Defect Prob: 27.3% | Risk: 28.0 | Category: source
+10. examples/tutorial/flaskr/auth.py | Score: 49.15 | OPPORTUNISTIC | Defect Prob: 11.8% | Risk: 12.2 | Category: source
+
+--- Non-Source Priorities (Separate View: 10 shown) ---
+1. tests/test_basic.py | Score: 66.47 | Category: test
+2. tests/test_blueprints.py | Score: 61.77 | Category: test
+3. docs/conf.py | Score: 61.10 | Category: docs
+4. tests/test_cli.py | Score: 60.20 | Category: test
+5. src/flask/testing.py | Score: 59.77 | Category: test
+6. tests/test_helpers.py | Score: 50.91 | Category: test
+7. tests/test_testing.py | Score: 50.60 | Category: test
+8. tests/conftest.py | Score: 48.95 | Category: test
+9. tests/test_appctx.py | Score: 48.89 | Category: test
+10. tests/test_config.py | Score: 48.74 | Category: test
+============================================================
+=== Scanning expressjs/express ===
+Wall time: 14.54s | Files analyzed: 142
+Category breakdown: {'source': 50, 'test': 92}
+
+--- NEW TOP 10 (Production Source Only) ---
+1. lib/response.js | Score: 62.01 | QUICK_WIN | Defect Prob: 44.9% | Risk: 46.0 | Category: source
+2. examples/mvc/lib/boot.js | Score: 52.58 | OPPORTUNISTIC | Defect Prob: 28.3% | Risk: 29.1 | Category: source
+3. lib/application.js | Score: 52.52 | OPPORTUNISTIC | Defect Prob: 32.7% | Risk: 33.5 | Category: source
+4. lib/utils.js | Score: 52.12 | OPPORTUNISTIC | Defect Prob: 31.4% | Risk: 32.2 | Category: source
+5. lib/request.js | Score: 52.03 | OPPORTUNISTIC | Defect Prob: 31.1% | Risk: 31.9 | Category: source
+6. lib/express.js | Score: 50.75 | OPPORTUNISTIC | Defect Prob: 26.9% | Risk: 27.6 | Category: source
+7. examples/auth/index.js | Score: 48.53 | OPPORTUNISTIC | Defect Prob: 10.0% | Risk: 10.1 | Category: source
+8. lib/view.js | Score: 47.29 | OPPORTUNISTIC | Defect Prob: 18.9% | Risk: 19.4 | Category: source
+9. examples/mvc/index.js | Score: 46.50 | OPPORTUNISTIC | Defect Prob: 15.2% | Risk: 15.6 | Category: source
+10. examples/multi-router/controllers/api_v1.js | Score: 44.94 | OPPORTUNISTIC | Defect Prob: 10.0% | Risk: 7.2 | Category: source
+
+--- Non-Source Priorities (Separate View: 10 shown) ---
+1. test/app.router.js | Score: 51.09 | Category: test
+2. test/res.send.js | Score: 51.08 | Category: test
+3. test/Router.js | Score: 50.78 | Category: test
+4. test/res.sendFile.js | Score: 49.47 | Category: test
+5. test/utils.js | Score: 48.86 | Category: test
+6. test/res.redirect.js | Score: 48.43 | Category: test
+7. test/acceptance/auth.js | Score: 48.36 | Category: test
+8. test/res.json.js | Score: 48.31 | Category: test
+9. test/res.jsonp.js | Score: 48.01 | Category: test
+10. test/res.download.js | Score: 47.89 | Category: test
+============================================================
+```
+
+### 20.4 Comparison: Before vs. After Elimination
+| Repository | Old #1 File (Round 1) | Old #1 Category | New #1 File (Round 2) | New #1 Category | Non-Source Elimination Impact |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`pallets/flask`** | `tests/test_basic.py` | `test` | `src/flask/app.py` | `source` | 4 test/doc files removed from default top 10; `tests/` and `docs/conf.py` routed to Non-Source view. |
+| **`expressjs/express`** | `lib/response.js` | `source` | `lib/response.js` | `source` | All 92 test files segregated; core source files (`lib/application.js`, `lib/request.js`) accurately ranked without test noise. |

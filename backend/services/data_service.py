@@ -5,6 +5,7 @@ Provides ingestion interfaces for Member 1 Data Pipeline outputs.
 
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from backend.services.code_analyzer import classify_file
 from backend.database.models import Repository, SourceFile, EngineeringMetric, TechnicalDebtItem
 from backend.schemas.repository import RepositoryCreate, SourceFileCreate
 from backend.schemas.metrics import EngineeringMetricCreate, TechnicalDebtItemCreate
@@ -60,6 +61,7 @@ class DataService:
                 file_name=file_in.file_name,
                 language=file_in.language,
                 lines_of_code=file_in.lines_of_code,
+                file_category=classify_file(file_in.file_path),
                 is_active=file_in.is_active,
             )
             db.add(file_obj)

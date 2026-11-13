@@ -30,7 +30,7 @@ from backend.database.models import (
     JiraIssueLink,
 )
 from backend.services.git_cloner import SandboxedGitCloner
-from backend.services.code_analyzer import scan_repository_tree
+from backend.services.code_analyzer import scan_repository_tree, classify_file
 from backend.services.git_miner import GitMiner
 from backend.services.jira_service import derive_jira_business_signals
 from backend.integrations.jira_provider import JiraProvider
@@ -138,6 +138,7 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                     file_name=os.path.basename(rel_path),
                     language=f_info.get("language", "Unknown"),
                     lines_of_code=f_info.get("loc", 0),
+                    file_category=f_info.get("file_category") or classify_file(rel_path),
                     is_active=True,
                 )
                 db.add(file_obj)

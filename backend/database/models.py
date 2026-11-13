@@ -99,6 +99,7 @@ class SourceFile(Base):
     file_name = Column(String(100), nullable=False)
     language = Column(String(50), default="Python")
     lines_of_code = Column(Integer, default=0)
+    file_category = Column(String(50), default="source", index=True)  # source, test, docs, config, generated, vendored, build
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

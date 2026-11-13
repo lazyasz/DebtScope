@@ -59,6 +59,83 @@ def is_test_file(rel_path: str) -> bool:
     return False
 
 
+def classify_file(rel_path: str) -> str:
+    """
+    Classifies a file path into exactly one of:
+    - 'source': Production source code (default for code files)
+    - 'test': Unit, integration, or e2e tests, fixtures, specs
+    - 'docs': Documentation, markdown, reStructuredText, guides
+    - 'config': Configuration, linters, tsconfig, env files
+    - 'generated': Generated bundles, minified assets, protobuf/grpc stubs
+    - 'vendored': Third-party dependencies or vendored packages
+    - 'build': Build automation, Dockerfiles, package manifests, CI/CD
+    """
+    clean = rel_path.lower().replace("\\", "/")
+    filename = os.path.basename(clean)
+    parts = clean.split("/")
+
+    # 1. Vendored
+    if any(p in ("vendor", "node_modules", "third_party", "extern", "bower_components") for p in parts[:-1]):
+        return "vendored"
+
+    # 2. Generated
+    if (
+        filename.endswith(".min.js") or filename.endswith(".min.css") or
+        filename.endswith(".map") or filename.endswith(".bundle.js") or
+        filename.endswith("_pb2.py") or filename.endswith("_pb2_grpc.py") or
+        ".generated." in filename or ".min." in filename
+    ):
+        return "generated"
+
+    # 3. Build & CI/CD
+    build_files = {
+        "dockerfile", "docker-compose.yml", "docker-compose.yaml",
+        "makefile", "rakefile", "cmakelists.txt", "gemfile",
+        "setup.py", "setup.cfg", "pyproject.toml",
+        "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+        "pom.xml", "build.gradle", "build.gradle.kts", "gradlew",
+        "requirements.txt", "cargo.toml", "cargo.lock", "go.mod", "go.sum",
+    }
+    if filename in build_files or filename.startswith("dockerfile"):
+        return "build"
+    if any(p in (".github", ".gitlab", ".circleci", "jenkins", "build", "ci") for p in parts[:-1]):
+        return "build"
+
+    # 4. Config Names (e.g. pytest.ini, tox.ini, tsconfig.json, dotfiles)
+    config_names = {
+        "tsconfig.json", "jsconfig.json", "webpack.config.js", "vite.config.js", "vite.config.ts",
+        "rollup.config.js", "babel.config.js", "jest.config.js", "tailwind.config.js",
+        "postcss.config.js", "eslint.config.js", "prettier.config.js", "tox.ini",
+        "pytest.ini", ".flake8", ".editorconfig", ".gitignore", ".gitattributes"
+    }
+    if filename in config_names or filename.startswith("."):
+        return "config"
+
+    # 5. Tests
+    if (
+        is_test_file(clean) or
+        any(p in ("tests", "test", "__tests__", "spec", "specs", "fixtures", "mock", "mocks") for p in parts[:-1])
+    ):
+        return "test"
+
+    # 6. Docs
+    docs_exts = (".md", ".rst", ".txt", ".adoc", ".pdf")
+    docs_names = {"readme", "license", "changelog", "contributing", "authors", "notice", "copying", "history"}
+    name_no_ext, ext = os.path.splitext(filename)
+    if any(p in ("docs", "doc", "documentation", "site", "guide") for p in parts[:-1]):
+        return "docs"
+    if ext in docs_exts or name_no_ext in docs_names:
+        return "docs"
+
+    # 7. Other Config Extensions
+    config_exts = (".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".xml", ".env")
+    if ext in config_exts:
+        return "config"
+
+    # 8. Default to Source
+    return "source"
+
+
 def detect_coverage_artifacts(repo_dir: str) -> Tuple[Optional[float], str]:
     """
     Scans repository directory for test coverage reports.
@@ -237,6 +314,7 @@ def analyze_single_file(repo_root: str, rel_path: str) -> Dict[str, Any]:
         "code_smells_count": len(debt_items),
         "debt_items": debt_items,
         "function_count": num_funcs,
+        "file_category": classify_file(rel_path),
     }
 
 

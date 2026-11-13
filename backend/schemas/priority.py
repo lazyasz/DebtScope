@@ -64,6 +64,7 @@ class RankedFilePriority(BaseModel):
     recommendation: str
     quadrant: str
     roi_score: float
+    file_category: str = "source"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []
@@ -93,6 +94,7 @@ class FileDetailResponse(BaseModel):
     action_summary: str
     quadrant: str
     roi_score: float
+    file_category: str = "source"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []

@@ -61,6 +61,7 @@ def trigger_analysis(
 def list_priorities(
     repository_id: Optional[int] = Query(None, description="Filter by repository ID"),
     priority_level: Optional[str] = Query(None, description="Filter by level: CRITICAL, HIGH, MEDIUM, LOW"),
+    category: Optional[str] = Query("source", description="Filter by category: source (default), non_source, test, docs, config, generated, vendored, build, all"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     workspace: Workspace = Depends(get_current_workspace),
@@ -68,12 +69,14 @@ def list_priorities(
 ):
     """
     Returns prioritized remediation order ranked by business-aware Priority Score.
+    Non-source files (tests, docs, build, config) are excluded by default and available via category filter.
     """
     return PriorityService.get_ranked_priorities(
         db=db,
         repo_id=repository_id,
         workspace_id=workspace.id,
         priority_level=priority_level,
+        category=category,
         limit=limit,
         offset=offset,
     )

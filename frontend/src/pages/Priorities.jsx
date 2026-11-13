@@ -35,6 +35,7 @@ export default function Priorities() {
   const [error, setError] = useState(null);
   const [activeSquad, setActiveSquad] = useState('All Squads');
   const [activeQuadrant, setActiveQuadrant] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('source');
   const { notify } = useAuth();
   const navigate = useNavigate();
 
@@ -50,7 +51,7 @@ export default function Priorities() {
       try {
         setLoading(true);
         setError(null);
-        const result = await getPriorities();
+        const result = await getPriorities(selectedCategory);
         if (!cancelled) setData(result);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load priorities');
@@ -60,7 +61,7 @@ export default function Priorities() {
     }
     fetchData();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedCategory]);
 
   const openSingleJira = (item) => {
     setSelectedComponent({
@@ -103,6 +104,15 @@ export default function Priorities() {
     { id: 'STRATEGIC_REFACTOR', label: 'Strategic', count: strategicCount },
     { id: 'OPPORTUNISTIC', label: 'Opportunistic', count: opportunisticCount },
     { id: 'DEPRIORITIZED', label: 'Deprioritized', count: deprioritizedCount },
+  ];
+
+  const categoryTabs = [
+    { id: 'source', label: 'Production Source (Default)' },
+    { id: 'non_source', label: 'Non-Source View' },
+    { id: 'test', label: 'Tests' },
+    { id: 'docs', label: 'Docs' },
+    { id: 'build', label: 'Build / Config' },
+    { id: 'all', label: 'All Files' },
   ];
 
   const filteredData = data.filter((item) => {
@@ -319,6 +329,24 @@ export default function Priorities() {
             <Layers className="w-3.5 h-3.5" />
             <span>Bulk Export to Jira</span>
           </button>
+        </div>
+
+        {/* Category Classification View Tabs (Item 4: Non-source excluded by default, separate filterable view) */}
+        <div className="flex items-center gap-1.5 flex-wrap pt-1 pb-1 border-b border-[#f3f4f8]">
+          <span className="text-xs font-semibold text-[#525866] mr-1">View:</span>
+          {categoryTabs.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                selectedCategory === cat.id
+                  ? 'bg-[#7048e8] text-white shadow-2xs font-semibold'
+                  : 'bg-[#f3f4f8] text-[#525866] hover:bg-[#e2e4ea]'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
         </div>
 
         {/* Mobile Card List (< 768px) */}

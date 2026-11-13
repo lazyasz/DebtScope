@@ -16,6 +16,7 @@ import numpy as np
 import requests
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
+from backend.services.code_analyzer import classify_file
 from backend.database.models import (
     Repository,
     SourceFile,
@@ -407,6 +408,7 @@ class RepoScannerService:
                     file_name=fname,
                     language=lang,
                     lines_of_code=loc,
+                    file_category=classify_file(fpath),
                     is_active=True
                 )
                 db.add(src_file)
@@ -611,6 +613,7 @@ class RepoScannerService:
                     file_name=fname,
                     language="Java",
                     lines_of_code=loc,
+                    file_category=classify_file(fpath),
                     is_active=True
                 )
                 db.add(src_file)

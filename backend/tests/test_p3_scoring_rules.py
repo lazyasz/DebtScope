@@ -230,3 +230,67 @@ def test_provenance_honesty_and_technical_only_labeling(db_session):
     score_sim = PriorityService.calculate_file_priority(db_session, f_default.id)
     assert "simulated data, excluded from confidence" in score_sim.dimension_coverage
 
+
+def test_non_source_exclusion_from_default_priorities(db_session):
+    """
+    Verifies Item 4:
+    1. Non-source files (tests, docs, build, config) are excluded from the default priority ranking.
+    2. Non-source files are available via category filter ('non_source', 'test', 'all').
+    """
+    repo = DataService.get_or_create_repository(
+        db_session, RepositoryCreate(name="cat-repo", url="https://github.com/cat/test.git")
+    )
+    # File 1: production source
+    f_src = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="src/payments/charge.py", file_name="charge.py", language="Python", lines_of_code=200)
+    )
+    f_src.file_category = "source"
+    # File 2: test file
+    f_test = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="tests/test_charge.py", file_name="test_charge.py", language="Python", lines_of_code=150)
+    )
+    f_test.file_category = "test"
+    # File 3: docs file
+    f_doc = DataService.get_or_create_file(
+        db_session,
+        SourceFileCreate(repository_id=repo.id, file_path="docs/architecture.md", file_name="architecture.md", language="Markdown", lines_of_code=80)
+    )
+    f_doc.file_category = "docs"
+    db_session.commit()
+
+    # Ingest metrics and calculate priorities
+    for f in (f_src, f_test, f_doc):
+        DataService.ingest_engineering_metric(
+            db_session,
+            EngineeringMetricCreate(file_id=f.id, cyclomatic_complexity=12.0, technical_risk_score=60.0)
+        )
+        BusinessService.get_or_create_business_context(
+            db_session,
+            BusinessContextCreate(file_id=f.id, business_criticality=60.0)
+        )
+
+    PriorityService.analyze_all_files(db_session, repo_id=repo.id)
+
+    # 1. Default ranking (category="source"): contains ONLY f_src, f_test and f_doc are excluded
+    default_ranked = PriorityService.get_ranked_priorities(db_session, repo_id=repo.id, category="source")
+    assert len(default_ranked) == 1
+    assert default_ranked[0].file_id == f_src.id
+    assert default_ranked[0].file_category == "source"
+
+    # 2. Non-source view (category="non_source"): contains test and docs, excludes source
+    non_source_ranked = PriorityService.get_ranked_priorities(db_session, repo_id=repo.id, category="non_source")
+    assert len(non_source_ranked) == 2
+    assert {r.file_id for r in non_source_ranked} == {f_test.id, f_doc.id}
+
+    # 3. All view (category="all"): contains all 3 files
+    all_ranked = PriorityService.get_ranked_priorities(db_session, repo_id=repo.id, category="all")
+    assert len(all_ranked) == 3
+
+    # 4. Specific category view (category="test"): contains only f_test
+    test_ranked = PriorityService.get_ranked_priorities(db_session, repo_id=repo.id, category="test")
+    assert len(test_ranked) == 1
+    assert test_ranked[0].file_id == f_test.id
+
+

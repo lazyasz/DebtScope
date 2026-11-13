@@ -207,6 +207,7 @@ class PriorityService:
         repo_id: Optional[int] = None,
         workspace_id: Optional[str] = None,
         priority_level: Optional[str] = None,
+        category: Optional[str] = "source",
         limit: int = 50,
         offset: int = 0,
     ) -> List[RankedFilePriority]:
@@ -217,6 +218,20 @@ class PriorityService:
             query = query.filter(SourceFile.repository_id == repo_id)
         if priority_level:
             query = query.filter(PriorityScore.priority_level == priority_level.upper())
+
+        # Category Filtering: default "source" excludes tests, docs, config, generated, vendored, build
+        if category:
+            cat_lower = category.lower().strip()
+            if cat_lower == "source":
+                query = query.filter(
+                    (SourceFile.file_category == "source") | (SourceFile.file_category == None)
+                )
+            elif cat_lower == "non_source":
+                query = query.filter(
+                    (SourceFile.file_category != "source") & (SourceFile.file_category != None)
+                )
+            elif cat_lower not in ("all", "*"):
+                query = query.filter(SourceFile.file_category == cat_lower)
 
         scores = query.order_by(PriorityScore.rank.asc()).offset(offset).limit(limit).all()
 
@@ -242,6 +257,7 @@ class PriorityService:
                     file_path=file_obj.file_path,
                     language=file_obj.language,
                     lines_of_code=file_obj.lines_of_code,
+                    file_category=getattr(file_obj, "file_category", "source") or "source",
                     technical_risk=s.composite_technical_risk,
                     predicted_risk=file_obj.prediction.predicted_future_risk if file_obj.prediction else s.composite_technical_risk,
                     business_impact=s.composite_business_impact,

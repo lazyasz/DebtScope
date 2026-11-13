@@ -9,6 +9,7 @@ from backend.services.code_analyzer import (
     analyze_single_file,
     scan_repository_tree,
     is_test_file,
+    classify_file,
     detect_coverage_artifacts,
 )
 
@@ -91,3 +92,38 @@ function calculateDiscount(price, userType) {
             cov, prov = detect_coverage_artifacts(tmpdir)
             assert cov == 84.5
             assert prov == "MEASURED"
+
+    def test_classify_file_categories(self):
+        """Verify robust file classification across source/test/docs/config/generated/vendored/build."""
+        assert classify_file("src/flask/app.py") == "source"
+        assert classify_file("lib/router/index.js") == "source"
+        assert classify_file("backend/services/priority.py") == "source"
+
+        assert classify_file("tests/test_auth.py") == "test"
+        assert classify_file("test/app.router.js") == "test"
+        assert classify_file("src/components/Header.spec.tsx") == "test"
+        assert classify_file("tests/fixtures/mock_payload.json") == "test"
+
+        assert classify_file("docs/index.md") == "docs"
+        assert classify_file("README.md") == "docs"
+        assert classify_file("LICENSE") == "docs"
+        assert classify_file("CHANGELOG.rst") == "docs"
+
+        assert classify_file(".eslintrc.json") == "config"
+        assert classify_file("tsconfig.json") == "config"
+        assert classify_file("tox.ini") == "config"
+        assert classify_file("pytest.ini") == "config"
+
+        assert classify_file("dist/bundle.min.js") == "generated"
+        assert classify_file("assets/app.min.css") == "generated"
+        assert classify_file("proto/service_pb2.py") == "generated"
+
+        assert classify_file("vendor/cache/gems.rb") == "vendored"
+        assert classify_file("node_modules/lodash/index.js") == "vendored"
+
+        assert classify_file("Dockerfile") == "build"
+        assert classify_file("docker-compose.yml") == "build"
+        assert classify_file("package.json") == "build"
+        assert classify_file("pyproject.toml") == "build"
+        assert classify_file("Makefile") == "build"
+        assert classify_file(".github/workflows/ci.yml") == "build"

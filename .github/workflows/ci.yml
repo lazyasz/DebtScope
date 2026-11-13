@@ -28,9 +28,6 @@ jobs:
     env:
       ENVIRONMENT: development
       DATABASE_URL: postgresql+psycopg2://postgres:postgres_ci_password@localhost:5432/debtscope_test
-      DEV_SANDBOX_AUTH: "False"
-      JIRA_SIMULATION_MODE: "False"
-      NOTION_SIMULATION_MODE: "False"
 
     steps:
       - name: Checkout Repository

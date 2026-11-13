@@ -135,7 +135,7 @@ class GitHubProvider(IntegrationProvider):
         """Exchanges GitHub code for access token or returns mock identity in sandbox."""
         if not self.is_live_configured() or code.startswith("gh_mock"):
             return {
-                "access_token": "ghp_sandbox_mock_token_482819238472918",
+                "access_token": "mock_github_sandbox_token_482819238472918",
                 "refresh_token": None,
                 "expires_in": 2592000,
                 "scopes": "repo,read:org,read:user",
@@ -237,7 +237,7 @@ class GitHubProvider(IntegrationProvider):
             return {"repositories": repos, "total_count": len(repos), "source": "sandbox_catalog"}
 
         raw_token = TokenSecurity.decrypt(connection.access_token_enc)
-        if not raw_token or raw_token.startswith("ghp_sandbox"):
+        if not raw_token or raw_token.startswith("mock_github_sandbox") or raw_token.startswith("ghp_sandbox"):
             repos = SANDBOX_GITHUB_REPOSITORIES
             if query:
                 q = query.lower()

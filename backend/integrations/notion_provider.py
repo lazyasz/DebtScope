@@ -80,7 +80,7 @@ class NotionProvider(IntegrationProvider):
             if not settings.NOTION_SIMULATION_MODE:
                 raise RuntimeError("Notion live credentials not configured and NOTION_SIMULATION_MODE is disabled.")
             return {
-                "access_token": "secret_notion_sandbox_mock_token_7781263",
+                "access_token": "mock_notion_sandbox_token_7781263",
                 "workspace_id": "ws_notion_debtscope_core",
                 "workspace_name": "DebtScope Engineering Workspace",
                 "workspace_icon": "🌿",

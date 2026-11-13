@@ -103,10 +103,10 @@ Allows DebtScope to clone and analyze public repositories without aggressive rat
 
 ### `.env` Variables:
 ```env
-GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx" # For Option A
-GITHUB_APP_ID="123456"                 # For Option B
-GITHUB_CLIENT_ID="Iv1.xxxxxxxxxxxx"
-GITHUB_CLIENT_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+GITHUB_TOKEN="<paste-your-github-personal-access-token-here>" # For Option A
+GITHUB_APP_ID="123456"                                        # For Option B
+GITHUB_CLIENT_ID="<paste-your-github-app-client-id>"
+GITHUB_CLIENT_SECRET="<paste-your-github-app-client-secret>"
 GITHUB_PRIVATE_KEY_PATH="backend/secrets/github-app.private-key.pem"
 ```
 
@@ -187,7 +187,7 @@ When testing the Notion ingestion feature, create a database in your Notion work
 NOTION_CLIENT_ID="<your-notion-client-id>"
 NOTION_CLIENT_SECRET="<your-notion-client-secret>"
 NOTION_REDIRECT_URI="http://localhost:8000/api/v1/integrations/notion/callback"
-NOTION_API_KEY="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # For internal testing
+NOTION_API_KEY="<paste-your-notion-api-key-here>" # For internal testing
 ```
 
 ---
@@ -243,9 +243,9 @@ Powers the interactive Grounded AI Engineering Copilot (`POST /api/v1/copilot/ch
 COPILOT_LLM_PROVIDER=gemini
 
 # Google Gemini API Key (Option A)
-GEMINI_API_KEY="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+GEMINI_API_KEY="<paste-your-gemini-api-key-here>"
 
 # Anthropic Claude API Key (Option B)
-ANTHROPIC_API_KEY="sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx"
+ANTHROPIC_API_KEY="<paste-your-anthropic-api-key-here>"
 ```
 

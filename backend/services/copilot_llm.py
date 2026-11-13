@@ -407,7 +407,7 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
         tool_registry: CopilotToolRegistry,
     ) -> AsyncIterator[CopilotStreamEvent]:
         # Fallback to deterministic grounded adapter if key is missing or dummy
-        if not self.api_key or "AIzaSy" not in self.api_key or len(self.api_key) < 20:
+        if not self.api_key or len(self.api_key) < 20 or self.api_key.startswith("your-") or "<paste" in self.api_key:
             mock = DeterministicMockCopilotAdapter()
             async for ev in mock.stream_chat(messages, tool_registry):
                 yield ev

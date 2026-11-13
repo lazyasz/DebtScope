@@ -473,3 +473,49 @@ backend/tests/test_copilot_confirmation_gate.py::TestCopilotPromptInjectionResis
 ======================== 13 passed, 1 warning in 0.80s ========================
 ```
 
+---
+
+## 12. Item 2: Fail-Closed Configuration & Production Defaults
+
+### 12.1 Configuration Hardening
+1. **Production by Default**: `Settings.ENVIRONMENT` default changed from `"development"` to `"production"`.
+2. **Simulation Flags Default False**:
+   - `DEV_SANDBOX_AUTH`: default `False`
+   - `JIRA_SIMULATION_MODE`: default `False`
+   - `NOTION_SIMULATION_MODE`: default `False`
+   - `DEBUG`: default `False`
+3. **Production Guard Validator**: If `ENVIRONMENT == "production"`, any attempt to set `DEV_SANDBOX_AUTH=True`, `JIRA_SIMULATION_MODE=True`, or `NOTION_SIMULATION_MODE=True` raises a fatal `RuntimeError` at startup.
+4. **Cookie Security**: `COOKIE_SECURE` defaults to `None`, resolving automatically to `True` whenever `ENVIRONMENT == "production"`.
+5. **Docker Compose Fail-Closed**: `docker-compose.yml` updated with production defaults:
+   - `ENVIRONMENT=${ENVIRONMENT:-production}`
+   - `DEV_SANDBOX_AUTH=${DEV_SANDBOX_AUTH:-False}`
+   - `JIRA_SIMULATION_MODE=${JIRA_SIMULATION_MODE:-False}`
+   - `NOTION_SIMULATION_MODE=${NOTION_SIMULATION_MODE:-False}`
+   Development conveniences require an explicit, intentional override (`ENVIRONMENT=development`).
+
+### 12.2 Test Evidence
+```powershell
+py -m pytest backend/tests/test_multi_tenancy.py -k "TestDEVSandboxAuth" -v
+```
+Output:
+```
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\dhruv\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\dhruv\.gemini\antigravity-ide\scratch\DebtScope
+plugins: anyio-4.13.0, platformdirs-4.13.0
+collecting ... collected 28 items / 20 deselected / 8 selected
+
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_sandbox_auth_raises_in_production PASSED [ 12%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_jira_simulation_raises_in_production PASSED [ 25%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_notion_simulation_raises_in_production PASSED [ 37%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_production_mode_allowed_when_all_simulations_false PASSED [ 50%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_sandbox_auth_allowed_in_development PASSED [ 62%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_empty_env_refuses_sandbox_auth PASSED [ 75%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_five_weights_sum_to_one PASSED [ 87%]
+backend/tests/test_multi_tenancy.py::TestDEVSandboxAuth::test_effort_blend_is_separate_from_five_weights PASSED [100%]
+
+================= 8 passed, 20 deselected, 1 warning in 0.14s =================
+```
+
+

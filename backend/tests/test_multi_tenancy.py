@@ -224,6 +224,53 @@ class TestDEVSandboxAuth:
         )
         assert s.DEV_SANDBOX_AUTH is True
 
+    def test_empty_env_refuses_sandbox_auth(self, monkeypatch):
+        """With an empty environment, the app defaults to production fail-closed behavior and refuses sandbox auth."""
+        from backend.config import Settings, settings
+        from backend.api.auth_routes import _is_cookie_secure
+        from fastapi.testclient import TestClient
+        from backend.main import app
+
+        # Clear relevant environment overrides
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        monkeypatch.delenv("DEV_SANDBOX_AUTH", raising=False)
+        monkeypatch.delenv("JIRA_SIMULATION_MODE", raising=False)
+        monkeypatch.delenv("NOTION_SIMULATION_MODE", raising=False)
+
+        # 1. Settings instantiated with empty env defaults strictly to production
+        s = Settings(_env_file=None)
+        assert s.ENVIRONMENT == "production"
+        assert s.DEV_SANDBOX_AUTH is False
+        assert s.JIRA_SIMULATION_MODE is False
+        assert s.NOTION_SIMULATION_MODE is False
+        assert s.DEBUG is False
+
+        # 2. In production, cookies are secure by default
+        orig_env = settings.ENVIRONMENT
+        orig_sandbox = settings.DEV_SANDBOX_AUTH
+        orig_sec = settings.COOKIE_SECURE
+        try:
+            settings.ENVIRONMENT = "production"
+            settings.DEV_SANDBOX_AUTH = False
+            settings.COOKIE_SECURE = None
+            assert _is_cookie_secure() is True
+
+            # 3. Unauthenticated request to /auth/me returns 401 (refuses sandbox auto-login)
+            client = TestClient(app, raise_server_exceptions=False)
+            res = client.get("/api/v1/auth/me")
+            assert res.status_code == 401
+            assert res.json().get("sandbox_mode") is False
+            assert res.json().get("status") == "unauthenticated"
+
+            # 4. Request to /auth/google/login returns 503 (refuses sandbox bypass)
+            res_login = client.get("/api/v1/auth/google/login", follow_redirects=False)
+            assert res_login.status_code == 503
+            assert "not configured" in res_login.json().get("detail", "").lower()
+        finally:
+            settings.ENVIRONMENT = orig_env
+            settings.DEV_SANDBOX_AUTH = orig_sandbox
+            settings.COOKIE_SECURE = orig_sec
+
     def test_five_weights_sum_to_one(self):
         """Priority formula weights must sum to exactly 1.00."""
         from backend.config import Settings

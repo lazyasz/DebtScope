@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     )
     PROJECT_VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    ENVIRONMENT: str = "production"
+    DEBUG: bool = False
 
     # Database Configuration (SQLite default for dev, PostgreSQL for production)
     DATABASE_URL: str = "sqlite:///./tech_debt_intelligence.db"
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str = ""
 
     # Integrations: Atlassian Jira Cloud (OAuth 2.0 3LO & REST API)
-    JIRA_SIMULATION_MODE: bool = True  # Explicit flag; must be False in production
+    JIRA_SIMULATION_MODE: bool = False  # Explicit flag; must be False in production
     JIRA_CLIENT_ID: str = ""
     JIRA_CLIENT_SECRET: str = ""
     JIRA_REDIRECT_URI: str = "http://localhost:5173/auth/jira/callback"
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     JIRA_PROJECT_KEY: str = "DEBT"
 
     # Integrations: Notion (OAuth 2.0 & REST API v1)
-    NOTION_SIMULATION_MODE: bool = True  # Explicit flag; must be False in production
+    NOTION_SIMULATION_MODE: bool = False  # Explicit flag; must be False in production
     NOTION_CLIENT_ID: str = ""
     NOTION_CLIENT_SECRET: str = ""
     NOTION_REDIRECT_URI: str = "http://localhost:5173/auth/notion/callback"

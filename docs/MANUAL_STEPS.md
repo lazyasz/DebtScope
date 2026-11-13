@@ -118,37 +118,50 @@ GITHUB_PRIVATE_KEY_PATH="backend/secrets/github-app.private-key.pem"
 
 ---
 
-## 3. Atlassian Developer Console (Jira Cloud 3LO)
+## 3. Atlassian Developer Console (Jira Cloud OAuth 2.0 3LO)
 
-### Purpose
-Connects to Jira Cloud to link commits to tickets (`KEY-123`), compute business criticality from bug priorities, evaluate sprint urgency, and write back technical debt tasks.
+### Purpose & Architecture
+DebtScope connects to Jira Cloud via **OAuth 2.0 3-Legged OAuth (3LO)** rather than legacy user API tokens. 
+- **Why OAuth 2.0 3LO**: Personal API tokens tie integration access to a single developer account and lack refresh token rotation. OAuth 2.0 3LO allows each tenant workspace to authenticate independently, grants scoped least-privilege permissions, and uses `offline_access` to securely rotate tokens without exposing static passwords.
+- **Business Signals Derived**: Correlates git commit ticket keys (`PROJ-123`) to live sprint states, calculates business criticality from issue priority, computes release proximity from `fixVersions`, and exports confirmed refactoring tasks directly into team sprint backlogs.
 
-### Step-by-Step Instructions:
+### Required Scopes & Code Verification
+Every requested scope is audited and mapped to explicit backend calls in `backend/integrations/jira_provider.py` and `backend/services/jira_service.py`:
+
+| OAuth 2.0 Scope | Atlassian REST API Endpoints Invoked | Code Function & Purpose |
+| :--- | :--- | :--- |
+| **`read:jira-work`** | `GET /rest/api/3/issue/{issueIdOrKey}`<br>`GET /rest/api/3/project/search` | `fetch_live_issue()`: Reads issue type, priority, status, fixVersions, sprint state.<br>`fetch_project_keys()`: Validates extracted keys against connected project keys. |
+| **`read:jira-user`** | `GET /rest/api/3/myself`<br>`GET /oauth/token/accessible-resources` | `exchange_code()`: Validates authenticated user profile and identifies accessible Cloud site ID (`site_id`). |
+| **`write:jira-work`** | `POST /rest/api/3/issue`<br>`POST /rest/api/3/issue/bulk` | `create_issue()`: Creates technical debt refactoring tasks in active sprints.<br>`bulk_export_issues()`: Exports prioritized batch remediation backlog. |
+| **`offline_access`** | `POST https://auth.atlassian.com/oauth/token` | `refresh_access_token()`: Automatically rotates expired 3600s access tokens in background worker tasks without user prompt. |
+
+### Step-by-Step Configuration in Atlassian Developer Console:
 1. Navigate to the **[Atlassian Developer Console](https://developer.atlassian.com/console/myapps/)**.
-2. Click **Create** -> Select **OAuth 2.0 (3LO) integration**.
-3. Name: `DebtScope Platform` -> Click **Create**.
-4. In the left sidebar, click **Permissions**:
-   - Under **Jira API**, click **Add**.
-   - Click **Configure** next to Jira API.
-   - Add the following scopes:
-     - `read:jira-work` (read issues, projects, fixVersions)
-     - `read:jira-user` (read author details)
-     - `write:jira-work` (create refactoring tasks in active sprints)
-     - `offline_access` (obtain refresh tokens for background sync)
-5. In the left sidebar, click **Authorization**:
+2. Click **Create** &rarr; Select **OAuth 2.0 (3LO) integration**.
+3. Name your app `DebtScope Platform` &rarr; Click **Create**.
+4. In the left navigation, click **Permissions**:
+   - Under **Jira API**, click **Add**, then click **Configure**.
+   - Check the following classic/granular scopes:
+     - `read:jira-work`
+     - `read:jira-user`
+     - `write:jira-work`
+     - `offline_access`
+   - Click **Save**.
+5. In the left navigation, click **Authorization**:
    - Click **Add** next to OAuth 2.0 (3LO).
-   - Enter Callback URL:
-     - `http://localhost:8000/api/v1/integrations/jira/callback`
-     - `http://localhost:5173/auth/callback`
-     - `{TUNNEL_HTTPS_BASE}/api/v1/integrations/jira/callback`
+   - In **Callback URL**, add all required redirect environments:
+     - Local Backend API: `http://localhost:8000/api/v1/integrations/jira/callback`
+     - Local Frontend: `http://localhost:5173/integrations?provider=jira`
+     - Production / Tunnel: `{PUBLIC_HOST}/api/v1/integrations/jira/callback`
    - Click **Save changes**.
-6. In the left sidebar, click **Settings**:
+6. In the left navigation, click **Settings**:
    - Copy **Client ID** and **Secret**.
 
 ### `.env` Variables:
 ```env
-JIRA_CLIENT_ID="<your-atlassian-client-id>"
-JIRA_CLIENT_SECRET="<your-atlassian-client-secret>"
+# Atlassian Jira Cloud OAuth 2.0 (3LO)
+JIRA_CLIENT_ID="<your-atlassian-oauth-client-id>"
+JIRA_CLIENT_SECRET="<your-atlassian-oauth-client-secret>"
 JIRA_REDIRECT_URI="http://localhost:8000/api/v1/integrations/jira/callback"
 ```
 

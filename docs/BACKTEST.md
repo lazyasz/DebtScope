@@ -3,28 +3,34 @@
 **Protocol Specification**:
 - **Cutoff**: Exactly 18 months prior to the latest commit on default branch.
 - **Forward Window**: 12 months after cutoff date.
-- **Repositories**: 5 open-source repositories across 3 languages:
+- **Repositories**: 6 open-source repositories across 3 languages:
   1. `pallets/flask` (Python - web microframework)
   2. `psf/requests` (Python - HTTP client)
   3. `expressjs/express` (JavaScript - web framework)
   4. `fastify/fastify` (JavaScript - high performance framework)
-  5. `square/javapoet` (Java - source code generation; outside Apache Technical Debt Dataset)
+  5. `google/gson` (Java - serialization library; outside Apache Technical Debt Dataset)
+  6. `square/javapoet` (Java - source code generation; outside Apache Technical Debt Dataset)
 - **Zero Look-Ahead Proof**: All features (LOC, AST complexity via lizard, git churn, and commit frequency) were extracted strictly from `git cat-file -p <cutoff_commit>:<path>` and `git log --until=<cutoff_timestamp>`. Zero inputs were sampled from HEAD.
 - **Target Variable**: Ground-truth bug-fixing commit frequency touching each source file between $[T_{\text{cutoff}}, T_{\text{forward}}]$.
+- **Sample Size & Statistical Power Rule**: Repositories with fewer than 30 forward defect events are explicitly marked **Inconclusive**; no ranking conclusions are drawn from them independently. Valid inferences are derived exclusively from sufficiently powered datasets (fastify and pooled total with 95% bootstrap CIs).
 - **Integrity Rule**: Scores reported exactly as measured without post-hoc tuning of weights or features.
 
 ---
 
 ## 1. Summary of Repositories & Forward Defect Rates
 
-| Repository | Language | Cutoff Date (18m prior) | Forward End Date (12m window) | Source Files | Files with Future Bugs | Future Bug Fixes | Defect Rate |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`pallets/flask`** | Python | 2025-04-30 | 2026-05-01 | 53 | 6 | 11 | 11.3% |
-| **`psf/requests`** | Python | 2025-04-26 | 2026-04-27 | 30 | 11 | 15 | 36.7% |
-| **`expressjs/express`** | JavaScript | 2025-05-03 | 2026-05-04 | 83 | 3 | 5 | 3.6% |
-| **`fastify/fastify`** | JavaScript | 2025-05-14 | 2026-05-14 | 63 | 26 | 65 | 41.3% |
-| **`square/javapoet`** | Java | 2023-04-12 | 2024-04-11 | 17 | 1 | 1 | 5.9% |
-| **POOLED TOTAL** | **3 Languages** | **Multi-Epoch** | **12-Month Windows** | **246** | **47** | **97** | **19.1%** |
+> [!IMPORTANT]
+> **Statistical Power Threshold**: Individual repositories with fewer than 30 forward defect events have wide confidence intervals and high sample variance. They are formally marked **Inconclusive (< 30 events)** to prevent unfounded conclusions. The pooled dataset (N = 108 events) provides adequate statistical power.
+
+| Repository | Language | Cutoff Date (18m prior) | Forward End Date (12m window) | Source Files | Files with Future Bugs | Future Bug Fixes | Defect Rate | Statistical Power Status |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`pallets/flask`** | Python | 2025-04-30 | 2026-05-01 | 53 | 6 | 11 | 11.3% | ⚠️ Inconclusive (< 30 events) |
+| **`psf/requests`** | Python | 2025-04-26 | 2026-04-27 | 30 | 11 | 15 | 36.7% | ⚠️ Inconclusive (< 30 events) |
+| **`expressjs/express`** | JavaScript | 2025-05-03 | 2026-05-04 | 83 | 3 | 5 | 3.6% | ⚠️ Inconclusive (< 30 events) |
+| **`fastify/fastify`** | JavaScript | 2025-05-14 | 2026-05-14 | 63 | 26 | 65 | 41.3% | ✅ Sufficient Power (≥ 30 events) |
+| **`google/gson`** | Java | 2025-05-15 | 2026-05-15 | 126 | 10 | 11 | 7.9% | ⚠️ Inconclusive (< 30 events) |
+| **`square/javapoet`** | Java | 2023-04-12 | 2024-04-11 | 17 | 1 | 1 | 5.9% | ⚠️ Inconclusive (< 30 events) |
+| **POOLED TOTAL** | **3 Languages** | **Multi-Epoch** | **12-Month Windows** | **372** | **57** | **108** | **15.3%** | **✅ Sufficient Power (≥ 30 events)** |
 
 ---
 
@@ -32,12 +38,15 @@
 
 | Repository | DebtScope (with Heuristic) | DebtScope (without Heuristic) | LOC-Only Baseline | Churn-Only Baseline | LOC+Churn Composite | Random Baseline |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`pallets/flask`** | **+0.4456 [+0.236, +0.605]** | +0.4111 [+0.205, +0.577] | +0.4896 [+0.291, +0.647] | +0.4669 [+0.253, +0.626] | +0.4712 [+0.263, +0.630] | +0.1267 |
-| **`psf/requests`** | **+0.4150 [+0.042, +0.712]** | +0.3851 [-0.000, +0.692] | +0.0023 [-0.348, +0.365] | +0.0597 [-0.326, +0.433] | -0.1787 [-0.538, +0.197] | +0.1901 |
-| **`expressjs/express`** | **+0.2536 [+0.083, +0.407]** | +0.2722 [+0.120, +0.420] | +0.2744 [+0.120, +0.418] | +0.2758 [+0.125, +0.422] | +0.2783 [+0.124, +0.419] | -0.0560 |
+| **`pallets/flask`** * | **+0.4456 [+0.236, +0.605]** | +0.4111 [+0.205, +0.577] | +0.4896 [+0.291, +0.647] | +0.4669 [+0.253, +0.626] | +0.4712 [+0.263, +0.630] | +0.1267 |
+| **`psf/requests`** * | **+0.4150 [+0.042, +0.712]** | +0.3851 [-0.000, +0.692] | +0.0023 [-0.348, +0.365] | +0.0597 [-0.326, +0.433] | -0.1787 [-0.538, +0.197] | +0.1901 |
+| **`expressjs/express`** * | **+0.2536 [+0.083, +0.407]** | +0.2722 [+0.120, +0.420] | +0.2744 [+0.120, +0.418] | +0.2758 [+0.125, +0.422] | +0.2783 [+0.124, +0.419] | -0.0560 |
 | **`fastify/fastify`** | **+0.6834 [+0.541, +0.786]** | +0.6691 [+0.538, +0.762] | +0.6606 [+0.495, +0.777] | +0.7029 [+0.563, +0.791] | +0.6963 [+0.555, +0.793] | +0.0584 |
-| **`square/javapoet`** | **+0.0000 [-0.263, +0.285]** | +0.1021 [-0.113, +0.412] | +0.2042 [+0.037, +0.514] | +0.1531 [-0.044, +0.478] | +0.1531 [-0.044, +0.478] | -0.3572 |
-| **POOLED OVERALL** | **+0.4892 [+0.398, +0.562]** | **+0.4041 [+0.279, +0.509]** | +0.4367 [+0.339, +0.517] | +0.3399 [+0.191, +0.473] | +0.3024 [+0.157, +0.431] | +0.0395 |
+| **`google/gson`** * | **+0.2942 [+0.125, +0.423]** | +0.3080 [+0.137, +0.437] | +0.3396 [+0.202, +0.451] | +0.2693 [+0.071, +0.416] | +0.3404 [+0.202, +0.452] | -0.1353 |
+| **`square/javapoet`** * | **+0.0000 [-0.263, +0.285]** | +0.1021 [-0.113, +0.412] | +0.2042 [+0.037, +0.514] | +0.1531 [-0.044, +0.478] | +0.1531 [-0.044, +0.478] | -0.3572 |
+| **POOLED OVERALL** | **+0.4536 [+0.379, +0.519]** | **+0.3861 [+0.292, +0.465]** | +0.3896 [+0.306, +0.463] | +0.3119 [+0.192, +0.411] | +0.2890 [+0.179, +0.385] | -0.0135 |
+
+\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*
 
 ---
 
@@ -45,12 +54,15 @@
 
 | Repository | DebtScope (with Heuristic) | DebtScope (without Heuristic) | LOC-Only Baseline | Churn-Only Baseline | LOC+Churn Composite | Random Baseline |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`pallets/flask`** | **0.9043 [0.795, 0.996]** | 0.8723 [0.740, 0.980] | 0.9433 [0.873, 0.997] | 0.9220 [0.826, 1.000] | 0.9255 [0.833, 0.996] | 0.6135 |
-| **`psf/requests`** | **0.7273 [0.500, 0.895]** | 0.7057 [0.477, 0.884] | 0.4833 [0.282, 0.696] | 0.5048 [0.306, 0.690] | 0.3684 [0.165, 0.585] | 0.6029 |
-| **`expressjs/express`** | **0.8896 [0.697, 1.000]** | 0.9187 [0.787, 1.000] | 0.9229 [0.780, 1.000] | 0.9250 [0.805, 1.000] | 0.9292 [0.797, 1.000] | 0.4167 |
+| **`pallets/flask`** * | **0.9043 [0.795, 0.996]** | 0.8723 [0.740, 0.980] | 0.9433 [0.873, 0.997] | 0.9220 [0.826, 1.000] | 0.9255 [0.833, 0.996] | 0.6135 |
+| **`psf/requests`** * | **0.7273 [0.500, 0.895]** | 0.7057 [0.477, 0.884] | 0.4833 [0.282, 0.696] | 0.5048 [0.306, 0.690] | 0.3684 [0.165, 0.585] | 0.6029 |
+| **`expressjs/express`** * | **0.8896 [0.697, 1.000]** | 0.9187 [0.787, 1.000] | 0.9229 [0.780, 1.000] | 0.9250 [0.805, 1.000] | 0.9292 [0.797, 1.000] | 0.4167 |
 | **`fastify/fastify`** | **0.8935 [0.812, 0.957]** | 0.8997 [0.822, 0.962] | 0.8857 [0.795, 0.957] | 0.9106 [0.832, 0.967] | 0.9064 [0.828, 0.965] | 0.5073 |
-| **`square/javapoet`** | **0.5000 [0.267, 0.750]** | 0.6250 [0.375, 0.870] | 0.7500 [0.533, 0.938] | 0.6875 [0.464, 0.933] | 0.6875 [0.464, 0.933] | 0.0625 |
-| **POOLED OVERALL** | **0.8530 [0.796, 0.898]** | **0.7864 [0.696, 0.863]** | 0.8173 [0.754, 0.870] | 0.7350 [0.626, 0.840] | 0.7092 [0.603, 0.807] | 0.5219 |
+| **`google/gson`** * | **0.8142 [0.660, 0.927]** | 0.8289 [0.670, 0.940] | 0.8629 [0.768, 0.948] | 0.7862 [0.588, 0.926] | 0.8638 [0.770, 0.949] | 0.3569 |
+| **`square/javapoet`** * | **0.5000 [0.267, 0.750]** | 0.6250 [0.375, 0.870] | 0.7500 [0.533, 0.938] | 0.6875 [0.464, 0.933] | 0.6875 [0.464, 0.933] | 0.0625 |
+| **POOLED OVERALL** | **0.8583 [0.813, 0.899]** | **0.8020 [0.730, 0.862]** | 0.8107 [0.757, 0.863] | 0.7409 [0.646, 0.824] | 0.7253 [0.640, 0.800] | 0.4838 |
+
+\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*
 
 ---
 
@@ -60,12 +72,15 @@ Precision@10% measures the proportion of files ranked in the top 10% highest pri
 
 | Repository | DebtScope (with Heuristic) | DebtScope (without Heuristic) | LOC-Only Baseline | Churn-Only Baseline | LOC+Churn Composite | Random Baseline |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`pallets/flask`** | **50.0%** | 33.3% | 50.0% | 50.0% | 50.0% | 16.7% |
-| **`psf/requests`** | **66.7%** | 66.7% | 0.0% | 33.3% | 0.0% | 33.3% |
-| **`expressjs/express`** | **22.2%** | 22.2% | 22.2% | 22.2% | 22.2% | 0.0% |
+| **`pallets/flask`** * | **50.0%** | 33.3% | 50.0% | 50.0% | 50.0% | 16.7% |
+| **`psf/requests`** * | **66.7%** | 66.7% | 0.0% | 33.3% | 0.0% | 33.3% |
+| **`expressjs/express`** * | **22.2%** | 22.2% | 22.2% | 22.2% | 22.2% | 0.0% |
 | **`fastify/fastify`** | **100.0%** | 100.0% | 100.0% | 100.0% | 100.0% | 42.9% |
-| **`square/javapoet`** | **0.0%** | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
-| **POOLED OVERALL** | **60.0%** | **72.0%** | 52.0% | 60.0% | 56.0% | 20.0% |
+| **`google/gson`** * | **30.8%** | 30.8% | 38.5% | 30.8% | 30.8% | 0.0% |
+| **`square/javapoet`** * | **0.0%** | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% |
+| **POOLED OVERALL** | **52.6%** | **60.5%** | 50.0% | 55.3% | 47.4% | 10.5% |
+
+\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*
 
 ---
 

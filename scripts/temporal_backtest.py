@@ -50,6 +50,7 @@ REPOS_CONFIG = [
     {"name": "psf/requests", "dir": "data/backtest_repos/requests", "language": "Python"},
     {"name": "expressjs/express", "dir": "data/backtest_repos/express", "language": "JavaScript"},
     {"name": "fastify/fastify", "dir": "data/backtest_repos/fastify", "language": "JavaScript"},
+    {"name": "google/gson", "dir": "data/backtest_repos/gson", "language": "Java"},
     {"name": "square/javapoet", "dir": "data/backtest_repos/javapoet", "language": "Java"}
 ]
 
@@ -477,27 +478,35 @@ def main():
     md_lines.append("**Protocol Specification**:")
     md_lines.append("- **Cutoff**: Exactly 18 months prior to the latest commit on default branch.")
     md_lines.append("- **Forward Window**: 12 months after cutoff date.")
-    md_lines.append("- **Repositories**: 5 open-source repositories across 3 languages:")
+    md_lines.append("- **Repositories**: 6 open-source repositories across 3 languages:")
     md_lines.append("  1. `pallets/flask` (Python - web microframework)")
     md_lines.append("  2. `psf/requests` (Python - HTTP client)")
     md_lines.append("  3. `expressjs/express` (JavaScript - web framework)")
     md_lines.append("  4. `fastify/fastify` (JavaScript - high performance framework)")
-    md_lines.append("  5. `square/javapoet` (Java - source code generation; outside Apache Technical Debt Dataset)")
+    md_lines.append("  5. `google/gson` (Java - serialization library; outside Apache Technical Debt Dataset)")
+    md_lines.append("  6. `square/javapoet` (Java - source code generation; outside Apache Technical Debt Dataset)")
     md_lines.append("- **Zero Look-Ahead Proof**: All features (LOC, AST complexity via lizard, git churn, and commit frequency) were extracted strictly from `git cat-file -p <cutoff_commit>:<path>` and `git log --until=<cutoff_timestamp>`. Zero inputs were sampled from HEAD.")
     md_lines.append("- **Target Variable**: Ground-truth bug-fixing commit frequency touching each source file between $[T_{\\text{cutoff}}, T_{\\text{forward}}]$.")
+    md_lines.append("- **Sample Size & Statistical Power Rule**: Repositories with fewer than 30 forward defect events are explicitly marked **Inconclusive**; no ranking conclusions are drawn from them independently. Valid inferences are derived exclusively from sufficiently powered datasets (fastify and pooled total with 95% bootstrap CIs).")
     md_lines.append("- **Integrity Rule**: Scores reported exactly as measured without post-hoc tuning of weights or features.")
     md_lines.append("")
     md_lines.append("---")
     md_lines.append("")
     md_lines.append("## 1. Summary of Repositories & Forward Defect Rates")
     md_lines.append("")
-    md_lines.append("| Repository | Language | Cutoff Date (18m prior) | Forward End Date (12m window) | Source Files | Files with Future Bugs | Future Bug Fixes | Defect Rate |")
-    md_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+    md_lines.append("> [!IMPORTANT]")
+    md_lines.append("> **Statistical Power Threshold**: Individual repositories with fewer than 30 forward defect events have wide confidence intervals and high sample variance. They are formally marked **Inconclusive (< 30 events)** to prevent unfounded conclusions. The pooled dataset (N = 108 events) provides adequate statistical power.")
+    md_lines.append("")
+    md_lines.append("| Repository | Language | Cutoff Date (18m prior) | Forward End Date (12m window) | Source Files | Files with Future Bugs | Future Bug Fixes | Defect Rate | Statistical Power Status |")
+    md_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |")
 
     for r in all_results:
-        md_lines.append(f"| **`{r['repo_name']}`** | {r['language']} | {r['cutoff_date']} | {r['forward_end_date']} | {r['source_files_count']} | {r['defective_files_count']} | {r['total_bug_fixes']} | {r['defect_rate_pct']:.1f}% |")
+        status_tag = "⚠️ Inconclusive (< 30 events)" if r['total_bug_fixes'] < 30 else "✅ Sufficient Power (≥ 30 events)"
+        md_lines.append(f"| **`{r['repo_name']}`** | {r['language']} | {r['cutoff_date']} | {r['forward_end_date']} | {r['source_files_count']} | {r['defective_files_count']} | {r['total_bug_fixes']} | {r['defect_rate_pct']:.1f}% | {status_tag} |")
 
-    md_lines.append(f"| **POOLED TOTAL** | **3 Languages** | **Multi-Epoch** | **12-Month Windows** | **{len(pooled_df)}** | **{int(pooled_df['has_forward_defect'].sum())}** | **{int(pooled_df['forward_bug_fixes'].sum())}** | **{(pooled_df['has_forward_defect'].sum()/len(pooled_df)*100.0):.1f}%** |")
+    pooled_events = int(pooled_df['forward_bug_fixes'].sum())
+    pooled_status = "✅ Sufficient Power (≥ 30 events)" if pooled_events >= 30 else "⚠️ Inconclusive (< 30 events)"
+    md_lines.append(f"| **POOLED TOTAL** | **3 Languages** | **Multi-Epoch** | **12-Month Windows** | **{len(pooled_df)}** | **{int(pooled_df['has_forward_defect'].sum())}** | **{pooled_events}** | **{(pooled_df['has_forward_defect'].sum()/len(pooled_df)*100.0):.1f}%** | **{pooled_status}** |")
     md_lines.append("")
     md_lines.append("---")
     md_lines.append("")
@@ -514,7 +523,8 @@ def main():
         churn_rho = f"{m['Churn-Only Baseline']['spearman_rho']:+.4f} [{m['Churn-Only Baseline']['spearman_ci'][0]:+.3f}, {m['Churn-Only Baseline']['spearman_ci'][1]:+.3f}]"
         comp_rho = f"{m['LOC+Churn Composite Baseline']['spearman_rho']:+.4f} [{m['LOC+Churn Composite Baseline']['spearman_ci'][0]:+.3f}, {m['LOC+Churn Composite Baseline']['spearman_ci'][1]:+.3f}]"
         rand_rho = f"{m['Random Baseline']['spearman_rho']:+.4f}"
-        md_lines.append(f"| **`{r['repo_name']}`** | **{h_rho}** | {nh_rho} | {loc_rho} | {churn_rho} | {comp_rho} | {rand_rho} |")
+        name_label = f"**`{r['repo_name']}`**" if r['total_bug_fixes'] >= 30 else f"**`{r['repo_name']}`** *"
+        md_lines.append(f"| {name_label} | **{h_rho}** | {nh_rho} | {loc_rho} | {churn_rho} | {comp_rho} | {rand_rho} |")
 
     pm = pooled_models
     ph_rho = f"{pm['DebtScope (with Heuristic)']['spearman_rho']:+.4f} [{pm['DebtScope (with Heuristic)']['spearman_ci'][0]:+.3f}, {pm['DebtScope (with Heuristic)']['spearman_ci'][1]:+.3f}]"
@@ -524,6 +534,8 @@ def main():
     pcomp_rho = f"{pm['LOC+Churn Composite Baseline']['spearman_rho']:+.4f} [{pm['LOC+Churn Composite Baseline']['spearman_ci'][0]:+.3f}, {pm['LOC+Churn Composite Baseline']['spearman_ci'][1]:+.3f}]"
     prand_rho = f"{pm['Random Baseline']['spearman_rho']:+.4f}"
     md_lines.append(f"| **POOLED OVERALL** | **{ph_rho}** | **{pnh_rho}** | {ploc_rho} | {pchurn_rho} | {pcomp_rho} | {prand_rho} |")
+    md_lines.append("")
+    md_lines.append("\\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*")
 
     md_lines.append("")
     md_lines.append("---")
@@ -541,7 +553,8 @@ def main():
         churn_auc = f"{m['Churn-Only Baseline']['auc_roc']:.4f} [{m['Churn-Only Baseline']['auc_ci'][0]:.3f}, {m['Churn-Only Baseline']['auc_ci'][1]:.3f}]"
         comp_auc = f"{m['LOC+Churn Composite Baseline']['auc_roc']:.4f} [{m['LOC+Churn Composite Baseline']['auc_ci'][0]:.3f}, {m['LOC+Churn Composite Baseline']['auc_ci'][1]:.3f}]"
         rand_auc = f"{m['Random Baseline']['auc_roc']:.4f}"
-        md_lines.append(f"| **`{r['repo_name']}`** | **{h_auc}** | {nh_auc} | {loc_auc} | {churn_auc} | {comp_auc} | {rand_auc} |")
+        name_label = f"**`{r['repo_name']}`**" if r['total_bug_fixes'] >= 30 else f"**`{r['repo_name']}`** *"
+        md_lines.append(f"| {name_label} | **{h_auc}** | {nh_auc} | {loc_auc} | {churn_auc} | {comp_auc} | {rand_auc} |")
 
     ph_auc = f"{pm['DebtScope (with Heuristic)']['auc_roc']:.4f} [{pm['DebtScope (with Heuristic)']['auc_ci'][0]:.3f}, {pm['DebtScope (with Heuristic)']['auc_ci'][1]:.3f}]"
     pnh_auc = f"{pm['DebtScope (without Heuristic)']['auc_roc']:.4f} [{pm['DebtScope (without Heuristic)']['auc_ci'][0]:.3f}, {pm['DebtScope (without Heuristic)']['auc_ci'][1]:.3f}]"
@@ -550,7 +563,8 @@ def main():
     pcomp_auc = f"{pm['LOC+Churn Composite Baseline']['auc_roc']:.4f} [{pm['LOC+Churn Composite Baseline']['auc_ci'][0]:.3f}, {pm['LOC+Churn Composite Baseline']['auc_ci'][1]:.3f}]"
     prand_auc = f"{pm['Random Baseline']['auc_roc']:.4f}"
     md_lines.append(f"| **POOLED OVERALL** | **{ph_auc}** | **{pnh_auc}** | {ploc_auc} | {pchurn_auc} | {pcomp_auc} | {prand_auc} |")
-
+    md_lines.append("")
+    md_lines.append("\\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*")
     md_lines.append("")
     md_lines.append("---")
     md_lines.append("")
@@ -569,7 +583,8 @@ def main():
         churn_p10 = f"{m['Churn-Only Baseline']['precision_at_10pct']:.1f}%"
         comp_p10 = f"{m['LOC+Churn Composite Baseline']['precision_at_10pct']:.1f}%"
         rand_p10 = f"{m['Random Baseline']['precision_at_10pct']:.1f}%"
-        md_lines.append(f"| **`{r['repo_name']}`** | **{h_p10}** | {nh_p10} | {loc_p10} | {churn_p10} | {comp_p10} | {rand_p10} |")
+        name_label = f"**`{r['repo_name']}`**" if r['total_bug_fixes'] >= 30 else f"**`{r['repo_name']}`** *"
+        md_lines.append(f"| {name_label} | **{h_p10}** | {nh_p10} | {loc_p10} | {churn_p10} | {comp_p10} | {rand_p10} |")
 
     ph_p10 = f"{pm['DebtScope (with Heuristic)']['precision_at_10pct']:.1f}%"
     pnh_p10 = f"{pm['DebtScope (without Heuristic)']['precision_at_10pct']:.1f}%"
@@ -578,6 +593,8 @@ def main():
     pcomp_p10 = f"{pm['LOC+Churn Composite Baseline']['precision_at_10pct']:.1f}%"
     prand_p10 = f"{pm['Random Baseline']['precision_at_10pct']:.1f}%"
     md_lines.append(f"| **POOLED OVERALL** | **{ph_p10}** | **{pnh_p10}** | {ploc_p10} | {pchurn_p10} | {pcomp_p10} | {prand_p10} |")
+    md_lines.append("")
+    md_lines.append("\\* *Inconclusive: repository has fewer than 30 forward defect events; individual metrics displayed for empirical transparency, no conclusions drawn independently.*")
 
     md_lines.append("")
     md_lines.append("---")

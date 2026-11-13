@@ -131,3 +131,55 @@ function calculateDiscount(price, userType) {
         assert classify_file("pyproject.toml") == "build"
         assert classify_file("Makefile") == "build"
         assert classify_file(".github/workflows/ci.yml") == "build"
+
+    def test_multi_language_path_conventions(self):
+        """Verify explicit Python, JS/TS, Go, Java, and C# path conventions across test, docs, generated, vendored."""
+        # 1. Python
+        assert classify_file("tests/test_auth.py") == "test"
+        assert classify_file("backend/service_test.py") == "test"
+        assert classify_file("tests/conftest.py") == "test"
+        assert classify_file("docs/architecture.md") == "docs"
+        assert classify_file("proto/auth_pb2.py") == "generated"
+        assert classify_file("proto/auth_pb2_grpc.py") == "generated"
+        assert classify_file(".venv/lib/python3.11/site-packages/requests/api.py") == "vendored"
+        assert classify_file("src/pipeline/worker.py") == "source"
+
+        # 2. JavaScript / TypeScript
+        assert classify_file("src/__tests__/App.test.tsx") == "test"
+        assert classify_file("components/Modal.spec.ts") == "test"
+        assert classify_file("test/unit/router.test.js") == "test"
+        assert classify_file("docs/guide.md") == "docs"
+        assert classify_file("dist/bundle.min.js") == "generated"
+        assert classify_file("build/app.bundle.js") == "generated"
+        assert classify_file("node_modules/axios/index.js") == "vendored"
+        assert classify_file("bower_components/jquery/jquery.js") == "vendored"
+        assert classify_file("src/hooks/useAuth.ts") == "source"
+
+        # 3. Go
+        assert classify_file("pkg/server/handler_test.go") == "test"
+        assert classify_file("testing/mock_client.go") == "test"
+        assert classify_file("godoc/overview.md") == "docs"
+        assert classify_file("proto/service.pb.go") == "generated"
+        assert classify_file("internal/api/client_generated.go") == "generated"
+        assert classify_file("gen/models/user.go") == "generated"
+        assert classify_file("vendor/golang.org/x/net/context.go") == "vendored"
+        assert classify_file("cmd/server/main.go") == "source"
+
+        # 4. Java
+        assert classify_file("src/test/java/com/example/UserServiceTest.java") == "test"
+        assert classify_file("src/test/java/com/example/OrderTestCase.java") == "test"
+        assert classify_file("javadoc/index.md") == "docs"
+        assert classify_file("target/generated-sources/annotations/AutoValue_Foo.java") == "generated"
+        assert classify_file("build/generated/source/proto/Message.java") == "generated"
+        assert classify_file("third_party/antlr/Parser.java") == "vendored"
+        assert classify_file("src/main/java/com/example/PaymentProcessor.java") == "source"
+
+        # 5. C# (.NET)
+        assert classify_file("Services.Tests/AuthServiceTest.cs") == "test"
+        assert classify_file("MyApp.UnitTests/CalculatorTests.cs") == "test"
+        assert classify_file("Specs/LoginSpec.cs") == "test"
+        assert classify_file("docfx/api/index.md") == "docs"
+        assert classify_file("obj/Debug/net8.0/GeneratedInternalTypeHelper.g.cs") == "generated"
+        assert classify_file("Properties/Resources.Designer.cs") == "generated"
+        assert classify_file("packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.cs") == "vendored"
+        assert classify_file("src/Core/Controllers/ApiController.cs") == "source"

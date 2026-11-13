@@ -52,7 +52,10 @@ def is_test_file(rel_path: str) -> bool:
     parts = lower.split("/")
     
     # Check directory components
-    if any(p in ("tests", "test", "__tests__", "spec", "specs", "fixtures", "mock", "mocks", "testing", "test_cases") for p in parts[:-1]):
+    if (
+        any(p in ("tests", "test", "__tests__", "spec", "specs", "fixtures", "mock", "mocks", "testing", "test_cases") for p in parts[:-1]) or
+        any(p.endswith(".tests") or p.endswith(".unittests") or p.endswith(".specs") for p in parts[:-1])
+    ):
         return True
     
     # Filename prefix/suffix patterns
@@ -67,7 +70,9 @@ def is_test_file(rel_path: str) -> bool:
         filename.endswith(".test.tsx") or filename.endswith(".spec.tsx") or
         filename.endswith("test.java") or filename.endswith("tests.java") or
         filename.endswith("testcase.java") or filename.endswith("testcases.java") or
-        filename.endswith("_test.go") or filename.endswith("_spec.rb")
+        filename.endswith("_test.go") or filename.endswith("_spec.rb") or
+        filename.endswith("test.cs") or filename.endswith("tests.cs") or
+        filename.endswith("spec.cs") or filename.endswith("specs.cs")
     ):
         return True
     return False
@@ -89,7 +94,7 @@ def classify_file(rel_path: str) -> str:
     parts = clean.split("/")
 
     # 1. Vendored
-    if any(p in ("vendor", "node_modules", "third_party", "extern", "bower_components") for p in parts[:-1]):
+    if any(p in ("vendor", "node_modules", "third_party", "extern", "bower_components", "packages", ".venv", "venv") for p in parts[:-1]):
         return "vendored"
 
     # 2. Generated
@@ -97,7 +102,10 @@ def classify_file(rel_path: str) -> str:
         filename.endswith(".min.js") or filename.endswith(".min.css") or
         filename.endswith(".map") or filename.endswith(".bundle.js") or
         filename.endswith("_pb2.py") or filename.endswith("_pb2_grpc.py") or
-        ".generated." in filename or ".min." in filename
+        filename.endswith(".pb.go") or filename.endswith("_generated.go") or
+        filename.endswith(".g.cs") or filename.endswith(".designer.cs") or
+        ".generated." in filename or ".min." in filename or
+        any(p in ("generated", "generated-sources", "gen", "obj") for p in parts[:-1])
     ):
         return "generated"
 
@@ -136,7 +144,7 @@ def classify_file(rel_path: str) -> str:
     docs_exts = (".md", ".rst", ".txt", ".adoc", ".pdf")
     docs_names = {"readme", "license", "changelog", "contributing", "authors", "notice", "copying", "history"}
     name_no_ext, ext = os.path.splitext(filename)
-    if any(p in ("docs", "doc", "documentation", "site", "guide") for p in parts[:-1]):
+    if any(p in ("docs", "doc", "documentation", "site", "guide", "javadoc", "docfx", "godoc") for p in parts[:-1]):
         return "docs"
     if ext in docs_exts or name_no_ext in docs_names:
         return "docs"

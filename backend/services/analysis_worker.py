@@ -26,6 +26,7 @@ from backend.database.models import (
     TechnicalDebtItem,
     BusinessContext,
     MLPrediction,
+    PriorityScore,
     JiraIssueLink,
 )
 from backend.services.git_cloner import SandboxedGitCloner
@@ -111,9 +112,17 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
 
             job.repository_id = repo.id
 
-            # Clear previous files for this repository to ensure fresh telemetry
-            db.query(SourceFile).filter(SourceFile.repository_id == repo.id).delete()
-            db.commit()
+            # Clear previous files and all dependent records for this repository to ensure fresh telemetry
+            old_file_ids = [fid for (fid,) in db.query(SourceFile.id).filter(SourceFile.repository_id == repo.id).all()]
+            if old_file_ids:
+                db.query(EngineeringMetric).filter(EngineeringMetric.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(BusinessContext).filter(BusinessContext.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(MLPrediction).filter(MLPrediction.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(PriorityScore).filter(PriorityScore.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(TechnicalDebtItem).filter(TechnicalDebtItem.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(JiraIssueLink).filter(JiraIssueLink.file_id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.query(SourceFile).filter(SourceFile.id.in_(old_file_ids)).delete(synchronize_session=False)
+                db.commit()
 
             saved_files_count = 0
 
@@ -168,6 +177,7 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 # Save Business Context (integrated with Jira or defaults/rules)
                 is_core = any(p in rel_path.lower() for p in ("auth", "pay", "core", "api", "order"))
                 jira_keys = hist.get("jira_keys", [])
+                jira_issues = []
 
                 if jira_keys:
                     jira_prov = JiraProvider()
@@ -220,7 +230,7 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
                 pred_risk = min(99.0, max(10.0, tr_score * 0.95))
                 defect_prob = min(0.95, max(0.05, tr_score / 110.0))
                 cov_prov = f_info.get("coverage_provenance", "ESTIMATED")
-                has_jira_signal = len(matched_issues) > 0
+                has_jira_signal = len(jira_issues) > 0
                 base_conf = 0.88 if cov_prov == "MEASURED" else 0.72
                 confidence = round(min(0.98, base_conf + (0.10 if has_jira_signal else 0.0)), 2)
                 pred_obj = MLPrediction(
@@ -257,7 +267,10 @@ def run_analysis_pipeline(job_id: str, auth_token: Optional[str] = None) -> None
             RecommendationService.generate_all_recommendations(db, repo.id)
 
             # Stage 6: Completion
-            jira_linked_files_count = sum(1 for f_info in analyzed_files if len(file_jira_map.get(f_info["path"], [])) > 0)
+            jira_linked_files_count = sum(
+                1 for f_info in ast_files
+                if len(git_history.get(f_info["rel_path"], {}).get("jira_keys", [])) > 0
+            )
             jira_link_coverage_pct = round((jira_linked_files_count / max(1, saved_files_count)) * 100.0, 1)
 
             job.status = "COMPLETED"

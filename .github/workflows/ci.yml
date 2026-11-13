@@ -122,10 +122,65 @@ jobs:
           echo "Checking frontend HTTP response..."
           curl -s -I http://localhost:5173 | grep -E "HTTP/1.1 200|HTTP/1.1 304"
 
+          echo "Verifying unauthenticated request to /api/v1/workspaces rejects with 401..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/v1/workspaces)
+          if [ "$HTTP_CODE" -ne 401 ] && [ "$HTTP_CODE" -ne 403 ]; then
+            echo "Security verification failed: expected 401 or 403, got $HTTP_CODE"
+            exit 1
+          fi
+          echo "Successfully verified 401/403 rejection on protected endpoint."
+
       - name: Teardown Services
         if: always()
         run: |
           docker compose down -v
+
+  production-mode-security:
+    name: Production-Mode Security Verification (ENVIRONMENT=production)
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: production
+      DEV_SANDBOX_AUTH: "False"
+      DATABASE_URL: sqlite:///:memory:
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      SESSION_SECRET_KEY: "prod-secret-session-key-0123456789abcdef0123456789abcdef"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Verify Sandbox Login Rejected in Production (401/403)
+        run: |
+          pytest backend/tests/test_fail_closed_config.py -v
+
+      - name: Verify Startup Refuses DEV_SANDBOX_AUTH in Production
+        run: |
+          python -c "
+          import os, sys
+          os.environ['ENVIRONMENT'] = 'production'
+          os.environ['DEV_SANDBOX_AUTH'] = 'True'
+          try:
+              import backend.config
+              print('ERROR: Startup succeeded with DEV_SANDBOX_AUTH=True in production!')
+              sys.exit(1)
+          except RuntimeError as e:
+              print(f'SUCCESS: Startup refused DEV_SANDBOX_AUTH=True in production: {e}')
+          "
+
+      - name: Verify Secure + HttpOnly Cookie Flags in Production
+        run: |
+          pytest backend/tests/test_worker_mining.py -k "test_cookie_secure_samesite_behavior" -v
 
   gitleaks-scan:
     name: Secret Detection (Gitleaks)

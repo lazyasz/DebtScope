@@ -1,9 +1,8 @@
 # Gitleaks Configuration
-# Strict secret scanning with narrow fingerprint allowlist (no broad path bypasses)
+# Targeted allowlist strictly by exact commit hash (no broad path regexes or unwarranted stopwords)
 
 [allowlist]
-description = "Narrow fingerprint allowlist for false positive documentation placeholders and test fixtures"
-stopwords = [
-    "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx"
+description = "Allowlist historical commit 84f09aef containing false-positive documentation placeholders"
+commits = [
+    "84f09aef3e19fddf4fcf3504fb9ac29112d3e9f3"
 ]

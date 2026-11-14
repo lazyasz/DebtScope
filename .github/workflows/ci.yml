@@ -2,7 +2,7 @@ name: DebtScope CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, advancements, fix/**, feat/** ]
+    branches: [ main, advancements, fix/**, feat/**, workstream/** ]
   pull_request:
     branches: [ main, advancements ]
 
@@ -141,7 +141,7 @@ jobs:
     env:
       ENVIRONMENT: production
       DEV_SANDBOX_AUTH: "False"
-      DATABASE_URL: sqlite:///:memory:
+      DATABASE_URL: "sqlite:///:memory:"
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       SESSION_SECRET_KEY: "prod-secret-session-key-0123456789abcdef0123456789abcdef"
     steps:

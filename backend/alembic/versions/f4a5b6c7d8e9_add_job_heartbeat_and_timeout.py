@@ -15,21 +15,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    insp = sa.inspect(bind)
-    
-    cols = [c['name'] for c in insp.get_columns('analysis_jobs')]
-    if 'last_heartbeat' not in cols:
-        op.add_column('analysis_jobs', sa.Column('last_heartbeat', sa.DateTime(), nullable=True))
-    if 'timeout_seconds' not in cols:
-        op.add_column('analysis_jobs', sa.Column('timeout_seconds', sa.Integer(), server_default='600', nullable=True))
+    op.add_column('analysis_jobs', sa.Column('last_heartbeat', sa.DateTime(), nullable=True))
+    op.add_column('analysis_jobs', sa.Column('timeout_seconds', sa.Integer(), server_default='600', nullable=True))
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    insp = sa.inspect(bind)
-    cols = [c['name'] for c in insp.get_columns('analysis_jobs')]
-    if 'timeout_seconds' in cols:
-        op.drop_column('analysis_jobs', 'timeout_seconds')
-    if 'last_heartbeat' in cols:
-        op.drop_column('analysis_jobs', 'last_heartbeat')
+    op.drop_column('analysis_jobs', 'timeout_seconds')
+    op.drop_column('analysis_jobs', 'last_heartbeat')

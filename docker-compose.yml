@@ -29,11 +29,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-debtscope_admin}:${POSTGRES_PASSWORD:-debtscope_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-debtscope}
       - SECRET_KEY=${SECRET_KEY:-8225d302375b6b0ca4f39d59f4d9f3a0b571a050792491192d186b4fcaf7013a}
       - JWT_SECRET=${JWT_SECRET:-ab5823c6e3dc4749fdf60cecf0d6ff7107d9b86c962dc5871c065cc58f0ac59e}
-      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-jO6sB1JjIbyQVKkooyUsJrou4tx38pF8al656WmYkDg=}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
       - DEV_SANDBOX_AUTH=${DEV_SANDBOX_AUTH:-False}
       - JIRA_SIMULATION_MODE=${JIRA_SIMULATION_MODE:-False}
       - NOTION_SIMULATION_MODE=${NOTION_SIMULATION_MODE:-False}

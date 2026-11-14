@@ -119,6 +119,12 @@ jobs:
             sleep 2
           done
 
+          if ! curl -s -f http://localhost:8000/health; then
+            echo "Backend failed to become healthy. Container logs:"
+            docker compose logs
+            exit 1
+          fi
+
           echo "Checking frontend HTTP response..."
           curl -s -I http://localhost:5173 | grep -E "HTTP/1.1 200|HTTP/1.1 304"
 

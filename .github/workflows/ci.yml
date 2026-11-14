@@ -128,8 +128,8 @@ jobs:
           echo "Checking frontend HTTP response..."
           curl -s -I http://localhost:5173 | grep -E "HTTP/1.1 200|HTTP/1.1 304"
 
-          echo "Verifying unauthenticated request to /api/v1/workspaces rejects with 401..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/v1/workspaces)
+          echo "Verifying unauthenticated request to /api/v1/auth/me rejects with 401..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/v1/auth/me)
           if [ "$HTTP_CODE" -ne 401 ] && [ "$HTTP_CODE" -ne 403 ]; then
             echo "Security verification failed: expected 401 or 403, got $HTTP_CODE"
             exit 1

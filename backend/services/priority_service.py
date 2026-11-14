@@ -324,6 +324,9 @@ class PriorityService:
         max_age = max([d.debt_age_days for d in debt_items], default=30)
         norm_age = min(100.0, (max_age / 365.0) * 100.0)
 
+        is_core_path = any(p in file_obj.file_path.lower() for p in ("auth", "pay", "core", "api", "order"))
+        path_heuristic_val = 90.0 if is_core_path else 50.0
+
         breakdown = ScoreBreakdown(
             static_technical_risk=round(static_risk, 2),
             predicted_ml_risk=round(ml_risk, 2),
@@ -341,6 +344,9 @@ class PriorityService:
             baseline_priority_score=score.baseline_score,
             remediation_effort_factor=round(effort, 2),
             effort_deduction_or_boost=round((100.0 - effort) * settings.EFFORT_BLEND_WEIGHT, 2),
+            path_based_heuristic_score=path_heuristic_val,
+            path_based_heuristic_provenance="HEURISTIC",
+            path_based_heuristic_label="path-based importance (heuristic)",
         )
 
         debt_list = [
@@ -394,6 +400,9 @@ class PriorityService:
             model_calibration_status="uncalibrated_heuristic",
             confidence_score=conf,
             defect_probability_label="relative defect risk (uncalibrated)",
+            path_based_heuristic_score=path_heuristic_val,
+            path_based_heuristic_provenance="HEURISTIC",
+            path_based_heuristic_label="path-based importance (heuristic)",
             scored_dimensions_count=getattr(score, "scored_dimensions_count", 5) or 5,
             dimension_coverage=getattr(score, "dimension_coverage", "5 of 5 dimensions") or "5 of 5 dimensions",
             missing_dimensions=detail_missing_list,

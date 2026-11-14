@@ -339,6 +339,9 @@ class CopilotToolRegistry:
         debt_items = file_obj.debt_items
         max_age = max([d.debt_age_days for d in debt_items], default=30)
 
+        is_core_path = any(p in file_obj.file_path.lower() for p in ("auth", "pay", "core", "api", "order"))
+        path_heuristic_val = 90.0 if is_core_path else 50.0
+
         return {
             "file_path": file_obj.file_path,
             "final_priority_score": score.final_priority_score,
@@ -351,6 +354,12 @@ class CopilotToolRegistry:
                 "urgency_score": score.urgency_score,
                 "maintenance_cost": round(maint_cost, 1),
                 "debt_age_days": max_age,
+                "path_based_importance_heuristic": {
+                    "score": path_heuristic_val,
+                    "provenance": "HEURISTIC",
+                    "label": "path-based importance (heuristic)",
+                    "note": "Exposed as a separate labeled input; excluded from technical-only scoring baseline to avoid path bias.",
+                },
             },
             "weights": {
                 "technical_risk": settings.WEIGHT_TECHNICAL_RISK,

@@ -25,6 +25,9 @@ class ScoreBreakdown(BaseModel):
     baseline_priority_score: float
     remediation_effort_factor: float
     effort_deduction_or_boost: float
+    path_based_heuristic_score: Optional[float] = 50.0
+    path_based_heuristic_provenance: Optional[str] = "HEURISTIC"
+    path_based_heuristic_label: Optional[str] = "path-based importance (heuristic)"
 
 
 class PriorityScoreResponse(BaseModel):
@@ -69,6 +72,9 @@ class RankedFilePriority(BaseModel):
     model_calibration_status: str = "uncalibrated_heuristic"
     confidence_score: float = 0.72
     defect_probability_label: str = "relative defect risk (uncalibrated)"
+    path_based_heuristic_score: Optional[float] = 50.0
+    path_based_heuristic_provenance: Optional[str] = "HEURISTIC"
+    path_based_heuristic_label: Optional[str] = "path-based importance (heuristic)"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []
@@ -103,6 +109,9 @@ class FileDetailResponse(BaseModel):
     model_calibration_status: str = "uncalibrated_heuristic"
     confidence_score: float = 0.72
     defect_probability_label: str = "relative defect risk (uncalibrated)"
+    path_based_heuristic_score: Optional[float] = 50.0
+    path_based_heuristic_provenance: Optional[str] = "HEURISTIC"
+    path_based_heuristic_label: Optional[str] = "path-based importance (heuristic)"
     scored_dimensions_count: int = 5
     dimension_coverage: str = "5 of 5 dimensions"
     missing_dimensions: List[str] = []

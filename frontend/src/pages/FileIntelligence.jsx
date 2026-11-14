@@ -178,6 +178,56 @@ export default function FileIntelligence() {
         </div>
       </section>
 
+      {/* 5D Prioritization Inputs & Path Heuristic Exposure */}
+      <section className="p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-base font-bold text-[#161e10]">Prioritization Signal Breakdown</h2>
+            <p className="text-xs text-[#75786d]">Multi-dimensional engineering inputs and isolated heuristic signals</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 text-xs font-mono font-bold bg-[#edf1e8] text-[#2d3f16] rounded-full border border-[#d4dece]">
+              {data.dimension_coverage || "5 of 5 dimensions"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="p-3 bg-[#f8f9fb] rounded-xl border border-[#e2e4ea] space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[#525866]">Technical Risk</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">MEASURED</span>
+            </div>
+            <p className="text-base font-bold font-mono text-[#0f1015]">{formatScore(techRisk)} / 100</p>
+          </div>
+
+          <div className="p-3 bg-[#f8f9fb] rounded-xl border border-[#e2e4ea] space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[#525866]">Business Impact</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                {data.business_impact !== undefined ? "INTEGRATION" : "UNCONFIGURED"}
+              </span>
+            </div>
+            <p className="text-base font-bold font-mono text-[#0f1015]">
+              {data.business_impact !== undefined ? `${formatScore(data.business_impact)} / 100` : "Excluded (Technical-Only)"}
+            </p>
+          </div>
+
+          <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-amber-900">Path-based importance (heuristic)</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                {data.path_based_heuristic_provenance || "HEURISTIC"}
+              </span>
+            </div>
+            <p className="text-base font-bold font-mono text-amber-950">
+              {data.path_based_heuristic_score ?? 50.0} / 100
+            </p>
+            <p className="text-[10px] text-amber-700">Separate informational signal; excluded from technical-only scoring baseline.</p>
+          </div>
+        </div>
+      </section>
+
       {/* 6 Bento Metric Capsules */}
       <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {[

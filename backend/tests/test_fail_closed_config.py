@@ -103,3 +103,42 @@ def test_google_login_unconfigured_returns_503(monkeypatch):
     client = TestClient(app)
     response = client.get("/api/v1/auth/google/login")
     assert response.status_code == 503
+
+
+def test_cookie_secure_samesite_behavior():
+    """Verifies session cookie security behavior across environments and in production."""
+    from backend.api.auth_routes import _is_cookie_secure, _set_session_cookie
+    from backend.config import settings
+    from fastapi import Response
+
+    orig_secure = settings.COOKIE_SECURE
+    orig_env = settings.ENVIRONMENT
+    try:
+        # 1. Dev default: secure is False
+        settings.COOKIE_SECURE = None
+        settings.ENVIRONMENT = "development"
+        assert _is_cookie_secure() is False
+
+        # 2. Production default: secure is True
+        settings.COOKIE_SECURE = None
+        settings.ENVIRONMENT = "production"
+        assert _is_cookie_secure() is True
+
+        # 3. Explicit override
+        settings.COOKIE_SECURE = True
+        assert _is_cookie_secure() is True
+        settings.COOKIE_SECURE = False
+        assert _is_cookie_secure() is False
+
+        # 4. Check Set-Cookie headers in Response
+        res = Response()
+        settings.COOKIE_SECURE = True
+        _set_session_cookie(res, "test_jwt_value")
+        cookie_header = res.headers.get("set-cookie", "")
+        assert "Secure" in cookie_header
+        assert "SameSite=lax" in cookie_header or "samesite=lax" in cookie_header
+        assert "HttpOnly" in cookie_header or "httponly" in cookie_header
+    finally:
+        settings.COOKIE_SECURE = orig_secure
+        settings.ENVIRONMENT = orig_env
+

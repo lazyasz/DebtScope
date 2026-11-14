@@ -181,7 +181,7 @@ jobs:
 
       - name: Verify Secure + HttpOnly Cookie Flags in Production
         run: |
-          pytest backend/tests/test_worker_mining.py -k "test_cookie_secure_samesite_behavior" -v
+          pytest backend/tests/test_fail_closed_config.py -k "test_cookie_secure_samesite_behavior" -v
 
   gitleaks-scan:
     name: Secret Detection (Gitleaks)

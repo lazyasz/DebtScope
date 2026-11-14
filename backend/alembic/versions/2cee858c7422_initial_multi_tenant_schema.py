@@ -132,8 +132,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['file_id'], ['source_files.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('file_id')
+        sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('engineering_metrics', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_engineering_metrics_file_id'), ['file_id'], unique=True)
@@ -176,8 +175,7 @@ def upgrade() -> None:
         sa.Column('prediction_timestamp', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['file_id'], ['source_files.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('file_id')
+        sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('ml_predictions', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_ml_predictions_file_id'), ['file_id'], unique=True)
@@ -202,8 +200,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['file_id'], ['source_files.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('file_id')
+        sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('business_contexts', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_business_contexts_file_id'), ['file_id'], unique=True)
@@ -228,8 +225,7 @@ def upgrade() -> None:
         sa.Column('calculated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['file_id'], ['source_files.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['workspace_id'], ['workspaces.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('file_id')
+        sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('priority_scores', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_priority_scores_file_id'), ['file_id'], unique=True)

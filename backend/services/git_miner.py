@@ -47,6 +47,7 @@ class GitMiner:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            start_new_session=True,
         )
         try:
             stdout, stderr = proc.communicate(timeout=timeout)

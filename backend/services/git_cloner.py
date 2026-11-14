@@ -124,15 +124,20 @@ def get_dir_size_mb(path: str) -> float:
 
 
 def kill_process_tree(proc: subprocess.Popen) -> None:
-    """Actively terminates a process and all of its spawned child processes."""
-    if proc is None or proc.poll() is not None:
+    """Actively terminates a process and all of its spawned child processes across POSIX and Windows."""
+    if proc is None:
         return
     try:
         if os.name == "nt":
             # On Windows, taskkill /F /T kills the entire process tree cleanly
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
         else:
-            proc.kill()
+            import signal
+            try:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                proc.kill()
     except Exception as e:
         logger.debug("Failed to kill process tree for PID %s: %s", proc.pid, e)
     try:
@@ -182,6 +187,7 @@ class SandboxedGitCloner:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            start_new_session=True,
         )
 
         try:

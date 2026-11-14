@@ -305,3 +305,52 @@ class TestAnalysisJobEndpoints:
             assert scores_count == 0, f"Expected 0 scores written, found {scores_count}"
         finally:
             db.close()
+
+    def test_kill_process_tree_terminates_parent_and_child_processes(self):
+        """
+        Verifies that kill_process_tree terminates both the parent process and any
+        spawned child processes (via taskkill /F /T on Windows, and start_new_session + os.killpg on POSIX).
+        """
+        import sys
+        import time
+        from backend.services.git_cloner import kill_process_tree
+
+        parent_script = (
+            "import subprocess, sys, time\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+            "print(f'CHILD_PID:{child.pid}', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+
+        proc = subprocess.Popen(
+            [sys.executable, "-c", parent_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+
+        # Read child PID emitted by parent
+        line = proc.stdout.readline()
+        assert "CHILD_PID:" in line
+        child_pid = int(line.strip().split(":")[1])
+
+        # Execute process-tree termination
+        kill_process_tree(proc)
+        proc.wait(timeout=5)
+
+        # 1. Assert parent is dead
+        assert proc.poll() is not None
+
+        # 2. Assert child process is also dead
+        time.sleep(0.5)
+        if os.name == "nt":
+            check = subprocess.run(["tasklist", "/FI", f"PID eq {child_pid}"], capture_output=True, text=True)
+            assert str(child_pid) not in check.stdout
+        else:
+            try:
+                os.kill(child_pid, 0)
+                alive = True
+            except OSError:
+                alive = False
+            assert not alive, f"Child process {child_pid} was not terminated by kill_process_tree"

@@ -142,8 +142,9 @@ jobs:
       ENVIRONMENT: production
       DEV_SANDBOX_AUTH: "False"
       DATABASE_URL: "sqlite:///:memory:"
-      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-      SESSION_SECRET_KEY: "prod-secret-session-key-0123456789abcdef0123456789abcdef"
+      SECRET_KEY: "prod-secret-key-0123456789abcdef0123456789abcdef"
+      JWT_SECRET: "prod-jwt-secret-0123456789abcdef0123456789abcdef"
+      TOKEN_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

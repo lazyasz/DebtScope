@@ -269,6 +269,11 @@ def switch_profile(payload: SwitchProfileRequest, response: Response):
     Switches the active persona for viva demos.
     Sets a session cookie with that profile's JWT.
     """
+    if not settings.DEV_SANDBOX_AUTH:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo profile switching is disabled when DEV_SANDBOX_AUTH is False.",
+        )
     try:
         profile = set_active_profile(payload.profile_key)
     except ValueError as e:

@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column('issue_type', sa.String(length=50), server_default='Task'),
         sa.Column('priority', sa.String(length=50), server_default='Medium'),
         sa.Column('status', sa.String(length=50), server_default='Open'),
-        sa.Column('is_bug', sa.Boolean(), server_default='0'),
+        sa.Column('is_bug', sa.Boolean(), server_default=sa.text('false')),
         sa.Column('sprint_id', sa.String(length=100), nullable=True),
         sa.Column('sprint_state', sa.String(length=50), nullable=True),
         sa.Column('fix_version', sa.String(length=100), nullable=True),

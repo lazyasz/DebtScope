@@ -21,7 +21,8 @@ config = context.config
 
 # Set sqlalchemy.url dynamically from application settings or environment/command line
 x_args = context.get_x_argument(as_dictionary=True)
-db_url = x_args.get("db_url") or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+# settings.DATABASE_URL already reads the env var, and normalizes the Postgres driver
+db_url = x_args.get("db_url") or settings.DATABASE_URL
 config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.

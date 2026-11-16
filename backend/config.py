@@ -123,6 +123,16 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
 
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _pin_postgres_driver(cls, v: str) -> str:
+        """Hosts hand out postgres:// or postgresql:// URLs; newer SQLAlchemy maps those
+        to psycopg v3, but we ship psycopg2."""
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg2://" + v[len(prefix):]
+        return v
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_origins(cls, v):

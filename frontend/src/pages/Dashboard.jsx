@@ -47,8 +47,6 @@ export default function Dashboard() {
   const { data, loading, error, refresh } = useMetrics();
   const { notify, setSettingsOpen } = useAuth();
   const [scanModalOpen, setScanModalOpen] = useState(false);
-  const [isExportingNotion, setIsExportingNotion] = useState(false);
-  const [isPushingJira, setIsPushingJira] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [selectedFileForRecipe, setSelectedFileForRecipe] = useState(null);
@@ -57,45 +55,17 @@ export default function Dashboard() {
   if (loading) return <LoadingState message="Connecting to AST telemetry & ML prediction mesh..." />;
   if (error) return <ErrorState message={error} />;
 
-  const handlePushToJira = () => {
-    setIsPushingJira(true);
-    setTimeout(() => {
-      setIsPushingJira(false);
-      notify('Created 8 Jira Tasks in sprint backlog for high-priority hotspots.');
-    }, 800);
-  };
-
-  const handleSyncNotion = () => {
-    setIsExportingNotion(true);
-    setTimeout(() => {
-      setIsExportingNotion(false);
-      notify('Synchronized 18 remediation initiatives to Notion Engineering Roadmap.');
-    }, 750);
-  };
-
-  const trendData = data?.risk_trend || [
-    { sprint: 'Sprint 42', score: 68 },
-    { sprint: 'Sprint 43', score: 64 },
-    { sprint: 'Sprint 44', score: 58 },
-    { sprint: 'Sprint 45', score: 52 },
-    { sprint: 'Sprint 46', score: 46 },
-    { sprint: 'Sprint 47', score: 41 },
-    { sprint: 'Sprint 48', score: 38 },
-  ];
-
-  const categoryData = [
-    { name: 'Architecture & Coupling', value: 38, color: '#7048e8' },
-    { name: 'Complexity & Smells', value: 28, color: '#5b42a5' },
-    { name: 'Test Deficits', value: 18, color: '#d97706' },
-    { name: 'Security Hotspots', value: 16, color: '#dc2626' },
-  ];
-
-  const recentItems = data?.recent_high_priority || [
-    { id: 1, file: 'services/auth_service/auth.go', risk_score: 89.2, priority_level: 'CRITICAL', category: 'Security' },
-    { id: 2, file: 'pipeline/analytics/spark_aggregator.py', risk_score: 84.6, priority_level: 'CRITICAL', category: 'Complexity' },
-    { id: 3, file: 'api/routes/transaction_billing.py', risk_score: 79.1, priority_level: 'HIGH', category: 'Maintainability' },
-    { id: 4, file: 'models/decision_matrix_calculator.py', risk_score: 72.4, priority_level: 'HIGH', category: 'Performance' },
-  ];
+  const PALETTE = ['#7048e8', '#5b42a5', '#d97706', '#dc2626', '#059669', '#0ea5e9'];
+  const kpis = data?.kpis || {};
+  const health = data?.technical_debt_health?.score ?? 0;
+  const trendData = data?.risk_trend || [];
+  const categoryTotal = (data?.debt_categories || []).reduce((n, c) => n + c.value, 0);
+  const categoryData = (data?.debt_categories || []).map((c, i) => ({
+    name: (c.name.charAt(0) + c.name.slice(1).toLowerCase()).replace(/_/g, ' '),
+    value: Math.round((100 * c.value) / Math.max(1, categoryTotal)),
+    color: PALETTE[i % PALETTE.length],
+  }));
+  const recentItems = data?.recent_high_priority || [];
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 max-w-[1720px] mx-auto animate-fade-in">
@@ -150,21 +120,19 @@ export default function Dashboard() {
               </button>
 
               <button
-                onClick={handlePushToJira}
-                disabled={isPushingJira}
+                onClick={() => navigate('/integrations')}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f8f9fb] hover:bg-[#f0ecfc] text-[#5b42a5] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer disabled:opacity-50"
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>{isPushingJira ? 'Dispatching...' : 'Jira Backlog'}</span>
+                <span>Jira Backlog</span>
               </button>
 
               <button
-                onClick={handleSyncNotion}
-                disabled={isExportingNotion}
+                onClick={() => navigate('/integrations')}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f8f9fb] hover:bg-[#f3f4f8] text-[#525866] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer disabled:opacity-50"
               >
                 <Database className="w-3.5 h-3.5" />
-                <span>{isExportingNotion ? 'Syncing...' : 'Notion Roadmap'}</span>
+                <span>Notion Roadmap</span>
               </button>
             </div>
           </div>
@@ -174,7 +142,7 @@ export default function Dashboard() {
             <TelemetryRadar 
               size={120} 
               active={true} 
-              healthScore={95.0} 
+              healthScore={health} 
               label="Active AST Ingestion" 
             />
           </div>
@@ -195,10 +163,10 @@ export default function Dashboard() {
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#b39ef2] font-bold flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#b39ef2] animate-ping"></span>
-                Remediation Runway
+                Debt Health
               </span>
               <div className="text-3xl font-bold font-mono tracking-tight mt-1.5 text-white leading-none">
-                $<AnimatedCounter value={48.2} decimals={1} />k <span className="text-sm text-[#b39ef2]/80 font-normal">/ 340h</span>
+                <AnimatedCounter value={health} /> <span className="text-sm text-[#b39ef2]/80 font-normal">/ 100</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-white/10 border border-white/15">
@@ -207,9 +175,9 @@ export default function Dashboard() {
           </div>
 
           <div className="pt-3.5 relative z-10 flex items-center justify-between border-t border-white/10 text-xs">
-            <span className="text-[#b39ef2] font-mono text-[11px]">Sprint 48 Forecast</span>
-            <span className="px-2 py-0.5 rounded text-[11px] bg-white/10 text-white font-semibold font-mono border border-white/15">
-              -14.2% Drag
+            <span className="text-[#b39ef2] font-mono text-[11px]">{kpis.files_analyzed ?? 0} files analysed</span>
+            <span className="px-2 py-0.5 rounded text-[11px] bg-white/10 text-white font-semibold font-mono border border-white/15 capitalize">
+              {data?.technical_debt_health?.status || '—'}
             </span>
           </div>
         </InteractiveCard>
@@ -223,10 +191,10 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">
-                Quick Wins Identified
+                Quick Wins
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
-                <AnimatedCounter value={18} /> <span className="text-xs font-normal text-[#525866] font-sans">High-ROI Modules</span>
+                <AnimatedCounter value={kpis.quick_wins ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">files</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#f0ecfc] text-[#5b42a5]">
@@ -234,7 +202,7 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="pt-3.5 flex items-center justify-between border-t border-[#e2e4ea] text-xs">
-            <span className="text-[#525866] text-[11px]">Effort &lt; 40h · High Impact</span>
+            <span className="text-[#525866] text-[11px]">High impact · low effort</span>
             <span className="text-[11px] font-semibold text-[#5b42a5] group-hover:translate-x-0.5 transition flex items-center gap-1">
               <span>View Matrix</span>
               <ArrowRight className="w-3 h-3" />
@@ -251,10 +219,10 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">
-                Relative Defect Risk (Uncalibrated)
+                Average Defect Risk
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
-                <AnimatedCounter value={38.5} decimals={1} />% <span className="text-xs font-normal text-[#525866] font-sans">Exposure</span>
+                <AnimatedCounter value={kpis.avg_defect_risk_pct ?? 0} decimals={1} />% <span className="text-xs font-normal text-[#525866] font-sans">per file</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#fffbeb] text-[#d97706]">
@@ -262,9 +230,9 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="pt-3.5 flex items-center justify-between border-t border-[#e2e4ea] text-xs">
-            <span className="text-[#b45309] text-[11px] font-medium">Random Forest Regressor</span>
+            <span className="text-[#b45309] text-[11px] font-medium">ML estimate (uncalibrated)</span>
             <span className="text-[11px] font-mono font-semibold text-[#b45309] group-hover:translate-x-0.5 transition flex items-center gap-1">
-              <span>Relative SZZ Risk</span>
+              <span>Risk Predictions</span>
               <ChevronRight className="w-3 h-3" />
             </span>
           </div>
@@ -279,10 +247,10 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">
-                Hotspots Detected
+                Complex Files
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
-                <AnimatedCounter value={19} /> <span className="text-xs font-normal text-[#525866] font-sans">God Classes</span>
+                <AnimatedCounter value={kpis.complex_files ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">files</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#fef2f2] text-[#dc2626]">
@@ -290,7 +258,7 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="pt-3.5 flex items-center justify-between border-t border-[#e2e4ea] text-xs">
-            <span className="text-[#dc2626] text-[11px] font-medium">Complexity &gt; 25</span>
+            <span className="text-[#dc2626] text-[11px] font-medium">Cyclomatic complexity &gt; 25</span>
             <span className="text-[11px] font-semibold text-[#dc2626] group-hover:translate-x-0.5 transition flex items-center gap-1">
               <span>Inspect Files</span>
               <ArrowRight className="w-3 h-3" />
@@ -306,14 +274,16 @@ export default function Dashboard() {
         <div className="lg:col-span-8 p-5 bg-white rounded-xl border border-[#e2e4ea] shadow-2xs space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="text-sm font-bold text-[#0f1015] tracking-tight">Technical Risk Velocity Trajectory</h2>
-              <p className="text-xs text-[#525866]">7-Sprint historical trend vs predicted defect mitigation decay curve</p>
+              <h2 className="text-sm font-bold text-[#0f1015] tracking-tight">Technical Risk Trend</h2>
+              <p className="text-xs text-[#525866]">How average risk changes across your scans</p>
             </div>
-            <span className="px-2.5 py-0.5 rounded bg-[#f0ecfc] text-[#5b42a5] text-xs font-mono font-bold border border-[#d8cdfa]">
-              -44.1% Overall
-            </span>
           </div>
 
+          {trendData.length < 2 ? (
+            <div className="h-60 w-full flex items-center justify-center text-center text-xs text-[#88909e] border border-dashed border-[#e2e4ea] rounded-lg px-6">
+              Not enough history yet. The trend appears once your repositories have been scanned more than once.
+            </div>
+          ) : (
           <div className="h-60 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData} margin={{ top: 10, right: 25, left: -15, bottom: 0 }}>
@@ -323,12 +293,12 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor="#7048e8" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="sprint" stroke="#88909e" fontSize={11} tickLine={false} fontFamily="JetBrains Mono" />
+                <XAxis dataKey="period" stroke="#88909e" fontSize={11} tickLine={false} fontFamily="JetBrains Mono" />
                 <YAxis stroke="#88909e" fontSize={11} tickLine={false} domain={[0, 100]} fontFamily="JetBrains Mono" />
                 <Tooltip content={<ChartTooltip unit=" pts" />} />
                 <Area 
                   type="monotone" 
-                  dataKey="score" 
+                  dataKey="risk_score" 
                   name="Risk Score"
                   stroke="#7048e8" 
                   strokeWidth={2.5} 
@@ -341,6 +311,7 @@ export default function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
 
         {/* Right Bento: Category Decomposition (4 cols) */}
@@ -350,6 +321,9 @@ export default function Dashboard() {
             <p className="text-xs text-[#525866]">Categorical breakdown of codebase friction</p>
           </div>
 
+          {categoryData.length === 0 ? (
+            <p className="my-auto py-10 text-center text-xs text-[#88909e]">No debt items recorded yet.</p>
+          ) : (<>
           <div className="relative h-40 w-full my-auto flex items-center justify-center">
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-xl font-bold text-[#0f1015] font-mono leading-none">100%</span>
@@ -394,6 +368,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          </>)}
         </div>
       </section>
 
@@ -412,6 +387,10 @@ export default function Dashboard() {
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {recentItems.length === 0 && (
+          <p className="py-6 text-center text-xs text-[#88909e]">No prioritised files yet. Scan a repository to fill this list.</p>
+        )}
 
         {/* Mobile Card List (< 768px) */}
         <div className="md:hidden space-y-2.5">
@@ -523,15 +502,6 @@ export default function Dashboard() {
                       >
                         <Wand2 className="w-3 h-3 text-[#7048e8]" />
                         <span>Recipe</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          notify(`Dispatched Jira task for ${item.file}`);
-                        }}
-                        className="px-2.5 py-1 bg-white hover:bg-[#f8f9fb] text-[#525866] rounded text-xs font-semibold transition flex items-center gap-1 border border-[#e2e4ea] cursor-pointer"
-                      >
-                        <Layers className="w-3 h-3" />
-                        <span>Jira</span>
                       </button>
                       <button
                         onClick={() => navigate(`/files/${item.id}`)}

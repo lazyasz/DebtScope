@@ -1,30 +1,25 @@
-import { useState, useEffect } from 'react';
-import { getMetrics } from '../services/api';
+import { useState, useEffect, useCallback } from 'react';
+import { getDashboardSummary } from '../services/api';
 
+// Workspace-scoped dashboard summary (KPIs, top files, debt categories).
 export function useMetrics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchData() {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getMetrics();
-        if (!cancelled) setData(result);
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Failed to load metrics');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setData(await getDashboardSummary());
+    } catch (err) {
+      setError(err.message || 'Failed to load metrics');
+    } finally {
+      setLoading(false);
     }
-
-    fetchData();
-    return () => { cancelled = true; };
   }, []);
 
-  return { data, loading, error };
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { data, loading, error, refresh };
 }

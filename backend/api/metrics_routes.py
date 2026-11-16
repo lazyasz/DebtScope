@@ -199,7 +199,9 @@ def get_dashboard_summary(
                 {"name": "Low", "value": 0, "color": "#22c55e"},
             ],
             "risk_trend": [],
-            "recent_high_priority": []
+            "recent_high_priority": [],
+            "kpis": {"files_analyzed": 0, "quick_wins": 0, "avg_defect_risk_pct": 0.0, "complex_files": 0},
+            "debt_categories": [],
         }
 
     crit_cnt = sum(1 for f in files if f.priority_score and f.priority_score.priority_level == "CRITICAL")
@@ -225,6 +227,16 @@ def get_dashboard_summary(
         }
         for f in ranked_files
     ]
+
+    # Headline KPIs for the dashboard cards
+    quick_wins = sum(1 for f in files if f.priority_score and f.priority_score.quadrant == "QUICK_WIN")
+    preds = [f.prediction.defect_probability for f in files if f.prediction]
+    avg_defect_risk_pct = round(100 * sum(preds) / len(preds), 1) if preds else 0.0
+    complex_files = sum(1 for f in files if f.metrics and f.metrics.cyclomatic_complexity > 25)
+    category_counts = {}
+    for f in files:
+        for d in f.debt_items:
+            category_counts[d.debt_category] = category_counts.get(d.debt_category, 0) + 1
 
     return {
         "technical_debt_health": {
@@ -263,14 +275,15 @@ def get_dashboard_summary(
             {"name": "Medium", "value": med_cnt, "color": "#eab308"},
             {"name": "Low", "value": low_cnt, "color": "#22c55e"},
         ],
-        "risk_trend": [
-            {"period": "Sprint 18", "risk_score": round(avg_risk + 6, 1), "predicted_risk": round(avg_risk + 7, 1)},
-            {"period": "Sprint 19", "risk_score": round(avg_risk + 4, 1), "predicted_risk": round(avg_risk + 5, 1)},
-            {"period": "Sprint 20", "risk_score": round(avg_risk + 5, 1), "predicted_risk": round(avg_risk + 4, 1)},
-            {"period": "Sprint 21", "risk_score": round(avg_risk + 2, 1), "predicted_risk": round(avg_risk + 3, 1)},
-            {"period": "Sprint 22", "risk_score": round(avg_risk + 1, 1), "predicted_risk": round(avg_risk + 2, 1)},
-            {"period": "Sprint 23", "risk_score": round(avg_risk, 1), "predicted_risk": round(avg_risk, 1)},
-        ],
-        "recent_high_priority": recent_high_priority
+        # No scan history is stored yet, so there is no real trend to show
+        "risk_trend": [],
+        "recent_high_priority": recent_high_priority,
+        "kpis": {
+            "files_analyzed": len(files),
+            "quick_wins": quick_wins,
+            "avg_defect_risk_pct": avg_defect_risk_pct,
+            "complex_files": complex_files,
+        },
+        "debt_categories": [{"name": k, "value": v} for k, v in sorted(category_counts.items(), key=lambda kv: -kv[1])],
     }
 

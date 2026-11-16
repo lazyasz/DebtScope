@@ -97,7 +97,11 @@ export default function Login() {
         </button>
       </div>
 
-      <p className="mt-6 text-gray-600 text-xs">Academic project — PBL 2026</p>
+      <p className="mt-6 text-gray-600 text-xs">
+        Academic project — PBL 2026 ·{' '}
+        <a href="/privacy" className="hover:text-gray-400 underline">Privacy</a> ·{' '}
+        <a href="/terms" className="hover:text-gray-400 underline">Terms</a>
+      </p>
     </div>
   );
 }

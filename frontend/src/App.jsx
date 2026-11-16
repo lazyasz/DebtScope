@@ -19,6 +19,8 @@ const Copilot = lazy(() => import('./pages/Copilot'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
 const Simulator = lazy(() => import('./pages/Simulator'));
 const IntegrationsHub = lazy(() => import('./pages/IntegrationsHub'));
+const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 
 const fullPageLoader = (
   <div className="min-h-[60vh] flex items-center justify-center">
@@ -51,6 +53,8 @@ export default function App() {
               {/* Auth routes */}
               <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
 
               {/* Main App Layout — signed-in users only */}
               <Route element={<RequireAuth><AppLayout /></RequireAuth>}>

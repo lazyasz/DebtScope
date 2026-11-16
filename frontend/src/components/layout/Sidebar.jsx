@@ -14,15 +14,34 @@ import {
   Network,
 } from 'lucide-react';
 
-const navigation = [
-  { name: 'Overview', to: '/dashboard', icon: LayoutDashboard, badge: null },
-  { name: 'Integrations Hub', to: '/integrations', icon: Layers, badge: 'Hub' },
-  { name: 'Simulator & Gates', to: '/simulator', icon: Sliders, badge: 'ROI' },
-  { name: 'Debt Matrix', to: '/priorities', icon: Grid, badge: '5D' },
-  { name: 'Code Hotspots', to: '/hotspots', icon: Flame, badge: 'AST' },
-  { name: 'Telemetry & ML', to: '/predictions', icon: Activity, badge: 'SZZ' },
-  { name: 'Data Lineage & Quality', to: '/data-quality', icon: ShieldCheck, badge: 'Audit' },
-  { name: 'Copilot Refactor', to: '/copilot', icon: Bot, badge: 'AI' },
+// Grouped by the user's journey: see the state → decide what to fix → act → connect tools
+const sections = [
+  {
+    title: 'Overview',
+    items: [{ name: 'Dashboard', to: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    title: 'Analyze',
+    items: [
+      { name: 'Priorities', to: '/priorities', icon: Grid },
+      { name: 'Hotspots', to: '/hotspots', icon: Flame },
+      { name: 'Risk Predictions', to: '/predictions', icon: Activity },
+    ],
+  },
+  {
+    title: 'Act',
+    items: [
+      { name: 'AI Copilot', to: '/copilot', icon: Bot },
+      { name: 'What-If Simulator', to: '/simulator', icon: Sliders },
+    ],
+  },
+  {
+    title: 'Workspace',
+    items: [
+      { name: 'Integrations', to: '/integrations', icon: Layers },
+      { name: 'Data Quality', to: '/data-quality', icon: ShieldCheck },
+    ],
+  },
 ];
 
 export default function Sidebar({ open, onClose, onOpenScanModal }) {
@@ -54,12 +73,13 @@ export default function Sidebar({ open, onClose, onOpenScanModal }) {
 
         {/* Navigation Section */}
         <div className="flex-1 px-3 py-5 space-y-5 overflow-y-auto">
-          <div>
+          {sections.map((section) => (
+          <div key={section.title}>
             <span className="px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-[#88909e]">
-              Decision Engine
+              {section.title}
             </span>
             <nav className="mt-2 space-y-1">
-              {navigation.map((item) => (
+              {section.items.map((item) => (
                 <NavLink
                   key={item.name}
                   to={item.to}
@@ -76,15 +96,11 @@ export default function Sidebar({ open, onClose, onOpenScanModal }) {
                     <item.icon className="h-4 w-4 shrink-0" />
                     <span>{item.name}</span>
                   </div>
-                  {item.badge && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-[#f0ecfc] text-[#5b42a5]">
-                      {item.badge}
-                    </span>
-                  )}
                 </NavLink>
               ))}
             </nav>
           </div>
+          ))}
 
           {/* Quick Repo Scan Trigger */}
           <div className="p-3.5 bg-[#f8f9fb] rounded-xl border border-[#e2e4ea] space-y-2">

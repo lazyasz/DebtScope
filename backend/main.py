@@ -168,11 +168,11 @@ def health_check():
 
 
 # ---------------------------------------------------------
-# Mount Primary API Router (supports /api/v1, /api, and root endpoints)
+# Mount Primary API Router (supports /api/v1 and /api)
+# No root mount: it shadowed SPA routes like /priorities with raw JSON.
 # ---------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(api_router, prefix="/api")
-app.include_router(api_router)
 
 # ---------------------------------------------------------
 # Serve Compiled Frontend SPA (Production Static Files)

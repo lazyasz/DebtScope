@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import SandboxBanner from './components/layout/SandboxBanner';
 import LenisSmoothScroll from './components/ui/LenisSmoothScroll';
@@ -20,6 +20,25 @@ const DataQuality = lazy(() => import('./pages/DataQuality'));
 const Simulator = lazy(() => import('./pages/Simulator'));
 const IntegrationsHub = lazy(() => import('./pages/IntegrationsHub'));
 
+const fullPageLoader = (
+  <div className="min-h-[60vh] flex items-center justify-center">
+    <LoadingState message="Loading DebtScope intelligence view..." />
+  </div>
+);
+
+// App pages need a server session; the login page should not show once signed in.
+function RequireAuth({ children }) {
+  const { authChecked, isLoggedIn } = useAuth();
+  if (!authChecked) return fullPageLoader;
+  return isLoggedIn ? children : <Navigate to="/login" replace />;
+}
+
+function GuestOnly({ children }) {
+  const { authChecked, isLoggedIn } = useAuth();
+  if (!authChecked) return fullPageLoader;
+  return isLoggedIn ? <Navigate to="/dashboard" replace /> : children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -27,20 +46,14 @@ export default function App() {
       <SandboxBanner />
       <LenisSmoothScroll>
         <BrowserRouter>
-          <Suspense
-            fallback={
-              <div className="min-h-[60vh] flex items-center justify-center">
-                <LoadingState message="Loading DebtScope intelligence view..." />
-              </div>
-            }
-          >
+          <Suspense fallback={fullPageLoader}>
             <Routes>
               {/* Auth routes */}
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
 
-              {/* Main App Layout */}
-              <Route element={<AppLayout />}>
+              {/* Main App Layout — signed-in users only */}
+              <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/integrations" element={<IntegrationsHub />} />
@@ -53,6 +66,8 @@ export default function App() {
                 <Route path="/files/:id" element={<FileIntelligence />} />
                 <Route path="/copilot" element={<Copilot />} />
               </Route>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
             </Routes>
           </Suspense>
         </BrowserRouter>

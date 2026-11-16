@@ -4,26 +4,11 @@ import { getAuthMe, getDemoProfiles, loginWithGoogle, switchDemoProfile, logoutA
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('pei_user_session');
-    if (saved) {
-      try { return JSON.parse(saved); } catch(e) {}
-    }
-    return {
-      id: 'usr_lead_01',
-      name: 'Dhruv Sakhare',
-      email: 'dhruvsakhare2006@gmail.com',
-      avatar: 'https://ui-avatars.com/api/?name=Dhruv+Sakhare&background=43562b&color=ffffff&size=120',
-      role: 'Lead Architect',
-      role_code: 'lead_architect',
-      permissions: ['prioritize', 'export_jira', 'sync_notion', 'override_weights', 'manage_integrations'],
-      team: 'Core Platform & Architecture'
-    };
-  });
-
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('pei_logged_in') !== 'false';
-  });
+  // The server session (httpOnly cookie) is the only source of truth for who is signed in.
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [sandboxMode, setSandboxMode] = useState(false);
 
   const [profiles, setProfiles] = useState({});
   const [integrations, setIntegrations] = useState({
@@ -44,11 +29,20 @@ export function AuthProvider({ children }) {
   const refreshUser = async () => {
     try {
       const res = await getAuthMe();
-      if (res?.user && isLoggedIn) {
-        setUser(res.user);
+      if (res?.status === 'authenticated' && res.user) {
+        setUser({ ...res.user, avatar: res.user.avatar_url });
+        setIsLoggedIn(true);
+        setSandboxMode(!!res.sandbox_mode);
+      } else {
+        setUser(null);
+        setIsLoggedIn(false);
       }
     } catch (e) {
-      console.warn('Failed to load user state');
+      // 401 = no session
+      setUser(null);
+      setIsLoggedIn(false);
+    } finally {
+      setAuthChecked(true);
     }
   };
 
@@ -140,7 +134,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem('pei_logged_in', 'false');
     localStorage.removeItem('pei_user_session');
     localStorage.removeItem('pei_jwt');
-    showNotification('Successfully signed out. You are now in Guest Mode.', 'info');
+    showNotification('Signed out.', 'info');
+    window.location.assign('/login');
   };
 
   return (
@@ -148,6 +143,9 @@ export function AuthProvider({ children }) {
       value={{
         user,
         isLoggedIn,
+        authChecked,
+        sandboxMode,
+        refreshUser,
         profiles,
         integrations,
         loading,

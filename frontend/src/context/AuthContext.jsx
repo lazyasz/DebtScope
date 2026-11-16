@@ -155,6 +155,7 @@ export function AuthProvider({ children }) {
         setAuthModalOpen,
         setSettingsOpen,
         showNotification,
+        notify: showNotification, // many components call notify()
         handleGoogleLogin,
         handleGoogleCode,
         handleSwitchPersona,

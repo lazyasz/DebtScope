@@ -111,7 +111,9 @@
 }
 
 .animate-fade-in {
-  animation: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* `backwards`, not `forwards`: a transform kept after the animation turns this
+     element into the containing block for any `fixed` modal inside it (off-screen dialogs) */
+  animation: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes radar-sweep {

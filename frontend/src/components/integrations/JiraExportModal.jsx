@@ -27,8 +27,8 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
       if (isBulk) {
         const payload = {
           sprint_name: sprintName,
-          components: (targetComponents.length > 0 ? targetComponents : [{ file: 'services/auth/token_provider.py', priority_score: 85 }]).map((c) => ({
-            component_name: c.component || c.name || c.file || 'Component',
+          components: targetComponents.map((c) => ({
+            component_name: c.component || c.file_path || c.name || c.file || 'Component',
             priority_score: c.priority_score || c.priority || 75.0,
             remediation_effort_hours: c.remediation_effort_hours || c.remediation_effort || 8.0,
             defect_probability: c.defect_probability || 0.45,
@@ -40,7 +40,9 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
         };
         const res = await bulkExportJira(payload);
         setResult(res);
-        notifyUser(`✅ Created ${res.total_tickets_created || 8} Jira tickets for ${sprintName}!`);
+        notifyUser(res.mode === 'sandbox_mock'
+          ? 'Simulated only: Jira is not connected, no tickets were created.'
+          : `Created ${res.total_tickets_created} Jira tickets for ${sprintName}.`);
       } else {
         const payload = {
           component_name: targetComponent?.component || targetComponent?.name || targetComponent?.file || 'Component',
@@ -55,18 +57,14 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
         };
         const res = await createJiraIssue(payload);
         setResult(res);
-        notifyUser(`✅ Created Jira ticket ${res.issue_key || 'DEBT-1042'} successfully!`);
+        notifyUser(res.mode === 'sandbox_mock'
+          ? 'Simulated only: Jira is not connected, no ticket was created.'
+          : `Created Jira ticket ${res.issue_key}.`);
       }
     } catch (err) {
-      // Graceful fallback simulation
-      setResult({
-        status: 'created',
-        mode: 'sandbox_mock',
-        issue_key: 'DEBT-1042',
-        issue_url: 'https://jira.atlassian.net/browse/DEBT-1042',
-        total_tickets_created: isBulk ? 8 : 1,
-      });
-      notifyUser('✅ Created Jira issue (Sandbox Mode)!');
+      const message = err?.response?.data?.detail || err?.message || 'Request failed';
+      setResult({ status: 'error', message });
+      notifyUser(`Jira export failed: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -113,15 +111,20 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-[#161e10]">Jira Issues Created Successfully!</h4>
+                <h4 className="text-base font-bold text-[#161e10]">
+                  {result.status === 'error' ? 'Jira export failed'
+                    : result.mode === 'sandbox_mock' ? 'Simulated — Jira not connected' : 'Jira issues created'}
+                </h4>
                 <p className="text-xs text-[#75786d] mt-1 font-mono">
-                  {result.issue_key ? `Ticket: ${result.issue_key}` : `${result.total_tickets_created} tickets created`}
+                  {result.status === 'error' ? result.message
+                    : result.mode === 'sandbox_mock' ? 'Connect Jira in Integrations to create real tickets.'
+                    : result.issue_key ? `Ticket: ${result.issue_key}` : `${result.total_tickets_created} tickets created`}
                 </p>
               </div>
               <div className="p-3 bg-[#f8faf6] rounded-2xl border border-[#d4dece] text-xs font-mono text-left space-y-1">
                 <div className="flex justify-between">
                   <span className="text-[#75786d]">Mode:</span>
-                  <span className="font-bold text-[#2d3f16]">{result.mode || 'Sandbox Verified'}</span>
+                  <span className="font-bold text-[#2d3f16]">{result.mode === 'live' ? 'Live' : result.mode === 'sandbox_mock' ? 'Simulated' : '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#75786d]">Project:</span>

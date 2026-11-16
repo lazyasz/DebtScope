@@ -236,7 +236,7 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
       {notification && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#130e24] text-white px-4 py-2.5 rounded-xl shadow-xl border border-[#261c47] flex items-center gap-2.5 animate-fade-in text-xs font-medium">
           <Info className="w-4 h-4 text-[#b39ef2]" />
-          <span>{notification}</span>
+          <span>{notification.msg}</span>
         </div>
       )}
     </>

@@ -33,7 +33,6 @@ export default function Priorities() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeSquad, setActiveSquad] = useState('All Squads');
   const [activeQuadrant, setActiveQuadrant] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('source');
   const { notify } = useAuth();
@@ -84,15 +83,11 @@ export default function Priorities() {
 
   if (loading) return <LoadingState message="Calculating 5D Business-Aware Prioritization Matrix..." />;
   if (error) return <ErrorState message={error} />;
-  if (!data || data.length === 0) return <EmptyState title="No priority data available" />;
+  if (!data || data.length === 0) {
+    return <EmptyState title="Nothing to prioritise yet" message="Scan a repository from the Dashboard and its files will be ranked here." />;
+  }
 
-  const squadTabs = [
-    { id: 'All Squads', label: 'All Squads' },
-    { id: 'Core Backend', label: 'Core Backend' },
-    { id: 'Payments & Billing', label: 'Payments & Billing' },
-    { id: 'Cloud Infra', label: 'Cloud Infra' },
-  ];
-
+  const urgentCount = data.filter((i) => ['CRITICAL', 'HIGH'].includes((i.priority_level || '').toUpperCase())).length;
   const quickWinsCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('QUICK')).length;
   const strategicCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('STRATEGIC')).length;
   const opportunisticCount = data.filter((i) => (i.quadrant || '').toUpperCase().includes('OPPORTUNISTIC')).length;
@@ -133,35 +128,23 @@ export default function Priorities() {
         <div className="space-y-2 max-w-3xl">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-[#7048e8] animate-pulse"></span>
-            <span className="text-xs font-mono text-[#525866] uppercase tracking-wider font-semibold">Sprint 48 Remediation</span>
-            <span className="text-[#88909e]">·</span>
-            <span className="bg-[#f0ecfc] text-[#5b42a5] px-2 py-0.5 rounded text-xs font-mono font-semibold flex items-center gap-1 border border-[#d8cdfa]">
-              <Calendar className="w-3 h-3 text-[#7048e8]" />
-              Q3 Active Cycle
-            </span>
+            <span className="text-xs font-mono text-[#525866] uppercase tracking-wider font-semibold">{data.length} files ranked</span>
           </div>
           <h1 className="text-xl sm:text-3xl font-bold text-[#0f1015] tracking-tight">
-            Remediation & 5D Payoff Matrix
+            What to fix first
           </h1>
           <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs text-[#525866]">
-            <span className="font-semibold text-[#0f1015]">Multi-Factor Weights:</span>
+            <span className="font-semibold text-[#0f1015]">Priority score weights:</span>
             <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">35% Tech Risk</span>
             <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">30% Biz Impact</span>
             <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">15% Urgency</span>
             <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">10% Maint Cost</span>
-            <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">10% Dev Churn</span>
+            <span className="px-2 py-0.5 rounded bg-[#f3f4f8] border border-[#e2e4ea] font-mono">10% Debt Age</span>
           </div>
         </div>
 
         {/* Squad Pills & Global Action Triggers */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <SpringTabs
-            tabs={squadTabs}
-            activeTab={activeSquad}
-            onChange={setActiveSquad}
-            size="sm"
-          />
-
           <button
             onClick={() => setNotionModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#0f1015] hover:bg-[#f8f9fb] text-xs font-semibold border border-[#e2e4ea] transition cursor-pointer"
@@ -175,7 +158,7 @@ export default function Priorities() {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#130e24] hover:bg-[#20173d] text-white text-xs font-semibold transition cursor-pointer shadow-2xs"
           >
             <Layers className="w-3.5 h-3.5 text-[#b39ef2]" />
-            <span>Push Jira (24 SP)</span>
+            <span>Export to Jira</span>
           </button>
         </div>
       </section>
@@ -191,10 +174,10 @@ export default function Priorities() {
           <div className="flex items-start justify-between relative z-10">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#b39ef2] font-bold">
-                Remediation Runway
+                Critical &amp; High
               </span>
               <div className="text-3xl font-bold font-mono mt-1.5 leading-none text-white">
-                $<AnimatedCounter value={48.2} decimals={1} />k <span className="text-xs text-[#b39ef2]/80 font-normal font-sans">/ 340h</span>
+                <AnimatedCounter value={urgentCount} /> <span className="text-xs text-[#b39ef2]/80 font-normal font-sans">files</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-white/10 border border-white/15">
@@ -202,8 +185,8 @@ export default function Priorities() {
             </span>
           </div>
           <div className="pt-3 flex items-center justify-between z-10 border-t border-white/10 text-xs">
-            <span className="text-[#b39ef2] font-mono text-[11px]">Total Debt Drag</span>
-            <span className="px-2 py-0.5 rounded text-[11px] bg-white/10 font-bold font-mono text-white border border-white/15">-14.2% Drag</span>
+            <span className="text-[#b39ef2] font-mono text-[11px]">Priority level critical or high</span>
+            <span className="px-2 py-0.5 rounded text-[11px] bg-white/10 font-bold font-mono text-white border border-white/15">of {data.length}</span>
           </div>
         </InteractiveCard>
 
@@ -215,7 +198,7 @@ export default function Priorities() {
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">Quick Wins Ready</span>
               <div className="text-3xl font-bold text-[#0f1015] mt-1.5 font-mono">
-                <AnimatedCounter value={quickWinsCount || 18} /> <span className="text-xs font-normal text-[#525866] font-sans">Modules</span>
+                <AnimatedCounter value={quickWinsCount} /> <span className="text-xs font-normal text-[#525866] font-sans">Modules</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#f0ecfc] text-[#5b42a5]">
@@ -233,7 +216,7 @@ export default function Priorities() {
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#525866] font-semibold">Strategic Refactors</span>
               <div className="text-3xl font-bold text-[#0f1015] mt-1.5 font-mono">
-                <AnimatedCounter value={strategicCount || 12} /> <span className="text-xs font-normal text-[#525866] font-sans">Modules</span>
+                <AnimatedCounter value={strategicCount} /> <span className="text-xs font-normal text-[#525866] font-sans">Modules</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#fffbeb] text-[#d97706]">
@@ -320,7 +303,7 @@ export default function Priorities() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold text-[#0f1015]">Ranked Refactoring Backlog ({filteredData.length})</h2>
-            <p className="text-xs text-[#525866]">Ranked by multi-factor Payoff Score with dimension coverage and 1-click Jira ticket dispatch</p>
+            <p className="text-xs text-[#525866]">Highest priority score first. Open a file for its full breakdown.</p>
           </div>
           <button
             onClick={openBulkJira}
@@ -353,8 +336,8 @@ export default function Priorities() {
         <div className="md:hidden space-y-2.5">
           {filteredData.map((item, idx) => {
             const fileName = item.file_path || item.file_name || item.file || item.path || item.name || `module_${item.file_id || idx + 1}`;
-            const priorityScore = (item.priority_score || item.final_priority_score || 84.2).toFixed(1);
-            const fileId = item.file_id || item.id || idx + 1;
+            const priorityScore = (item.priority_score ?? item.final_priority_score ?? 0).toFixed(1);
+            const fileId = item.file_id ?? item.id;
             const qStyle = getQuadrantStyle(item.quadrant);
 
             return (
@@ -466,8 +449,8 @@ export default function Priorities() {
             <tbody className="divide-y divide-[#f3f4f8]">
               {filteredData.map((item, idx) => {
                 const fileName = item.file_path || item.file_name || item.file || item.path || item.name || `module_${item.file_id || idx + 1}`;
-                const fileId = item.file_id || item.id || idx + 1;
-                const priorityScore = (item.priority_score || item.final_priority_score || 84.2).toFixed(1);
+                const fileId = item.file_id ?? item.id;
+                const priorityScore = (item.priority_score ?? item.final_priority_score ?? 0).toFixed(1);
                 const qStyle = getQuadrantStyle(item.quadrant);
 
                 return (

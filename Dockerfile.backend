@@ -1,4 +1,14 @@
 # Multi-stage Dockerfile for DebtScope Backend Platform & Mining Worker
+# Stage 1: build the React app so this one image can serve UI + API on a single origin
+FROM node:20-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+# Empty base URL = same-origin API calls (no CORS, first-party session cookie)
+ENV VITE_API_BASE_URL=""
+RUN npm run build
+
 FROM python:3.12-slim AS base
 
 # Install system dependencies (git is mandatory for GitMiner and cloning worker)
@@ -21,6 +31,7 @@ COPY ml_engine/ ./ml_engine/
 COPY evals/ ./evals/
 COPY docs/ ./docs/
 COPY alembic.ini .
+COPY --from=frontend /frontend/dist ./frontend/dist
 
 # Create unprivileged runtime user for security hardening
 RUN useradd -m -u 1001 debtscope && \
@@ -35,4 +46,5 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # Entrypoint runs migrations and starts FastAPI ASGI server
-CMD ["sh", "-c", "python -m alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 2"]
+# PORT is set by hosts like Render; WEB_CONCURRENCY=1 suits small (512 MB) instances
+CMD ["sh", "-c", "python -m alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips='*'"]

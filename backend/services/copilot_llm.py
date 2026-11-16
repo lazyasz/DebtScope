@@ -420,8 +420,9 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
             return
 
         # Use Google Gemini REST streaming API
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key={self.api_key}"
-        headers = {"Content-Type": "application/json"}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent"
+        # Key in a header, not the URL, so it never shows up in logs or exception messages
+        headers = {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
 
         # Prepare tools in Gemini declaration format
         gemini_tools = [

@@ -1,0 +1,55 @@
+# Render Blueprint: one web service (UI + API) and a Postgres database.
+# Render → New → Blueprint → pick this repo. Values marked sync: false are entered in the dashboard.
+services:
+  - type: web
+    name: debtscope
+    runtime: docker
+    dockerfilePath: ./Dockerfile.backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: DEV_SANDBOX_AUTH
+        value: "False"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: debtscope-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      # Fernet key: generate with
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      # Set to the service URL once known, e.g. https://debtscope.onrender.com
+      - key: FRONTEND_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: NOTION_API_KEY
+        sync: false
+      - key: NOTION_DATABASE_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+databases:
+  - name: debtscope-db
+    plan: free
+    databaseName: debtscope
+    user: debtscope_admin

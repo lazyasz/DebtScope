@@ -1,0 +1,12 @@
+# Keep secrets and heavy local folders out of the Docker build context
+.env
+**/.env
+.venv/
+**/node_modules/
+frontend/dist/
+**/__pycache__/
+**/.pytest_cache/
+*.db
+.git/
+.claude/
+data/

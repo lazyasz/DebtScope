@@ -118,6 +118,8 @@ class Settings(BaseSettings):
     # Copilot LLM Configuration (Phase 3.5)
     COPILOT_LLM_PROVIDER: str = "gemini"  # 'gemini' or 'claude'
     GEMINI_API_KEY: str = ""
+    # Google retires model versions; override without a code change when that happens
+    GEMINI_MODEL: str = "gemini-flash-latest"
     ANTHROPIC_API_KEY: str = ""
 
 

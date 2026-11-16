@@ -136,7 +136,7 @@ async def google_oauth_callback(
 
     # CSRF check
     stored_state = request.cookies.get("oauth_state")
-    if stored_state and state and stored_state != state:
+    if not stored_state or not state or not secrets.compare_digest(stored_state, state):
         logger.warning("OAuth state mismatch: stored=%s received=%s", stored_state, state)
         return RedirectResponse(url=f"{frontend_url}/login?error=state_mismatch", status_code=302)
 

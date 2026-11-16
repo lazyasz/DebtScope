@@ -254,7 +254,7 @@ class TestDEVSandboxAuth:
                 JWT_SECRET="valid-secret-1234567890",
                 TOKEN_ENCRYPTION_KEY="",
             )
-        with pytest.raises(RuntimeError, match="not a valid 32-byte Fernet key"):
+        with pytest.raises(RuntimeError, match="TOKEN_ENCRYPTION_KEY is too short"):
             Settings(
                 ENVIRONMENT="production",
                 DEV_SANDBOX_AUTH=False,

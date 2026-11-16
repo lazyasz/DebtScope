@@ -197,12 +197,11 @@ class Settings(BaseSettings):
                     "Startup refused in production: TOKEN_ENCRYPTION_KEY is missing or using an insecure default. "
                     "Generate a valid 32-byte Fernet key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
                 )
-            try:
-                from cryptography.fernet import Fernet
-                Fernet(self.TOKEN_ENCRYPTION_KEY.encode())
-            except Exception as e:
+            # Any high-entropy value works (e.g. a host's "generate" button): TokenSecurity
+            # derives its cipher key by hashing, so the Fernet format itself isn't required.
+            if len(self.TOKEN_ENCRYPTION_KEY) < 32:
                 raise RuntimeError(
-                    f"Startup refused in production: TOKEN_ENCRYPTION_KEY is not a valid 32-byte Fernet key: {e}"
+                    "Startup refused in production: TOKEN_ENCRYPTION_KEY is too short (need 32+ random characters)."
                 )
 
         return self

@@ -9,7 +9,7 @@ import LoadingState from './components/ui/LoadingState';
 // Route-level code splitting for performance and bundle size reduction
 const Login = lazy(() => import('./pages/Login'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import('./pages/DashboardHome'));
 const TechnicalDebt = lazy(() => import('./pages/TechnicalDebt'));
 const Predictions = lazy(() => import('./pages/Predictions'));
 const Priorities = lazy(() => import('./pages/Priorities'));

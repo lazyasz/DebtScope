@@ -156,7 +156,7 @@ def scan_repository(
 
     from backend.services.repo_scanner_service import RepoScannerService
     try:
-        result = RepoScannerService.scan_github_repository(db, payload.url)
+        result = RepoScannerService.scan_github_repository(db, payload.url, workspace.id)
         return result
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

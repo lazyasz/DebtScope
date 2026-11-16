@@ -275,7 +275,7 @@ class GitHubProvider(IntegrationProvider):
 
             try:
                 # Trigger AST telemetry scan via RepoScannerService
-                scan_res = RepoScannerService.scan_github_repository(db, repo_url)
+                scan_res = RepoScannerService.scan_github_repository(db, repo_url, connection.workspace_id if connection else "ws_demo")
                 synced.append({
                     "id": repo_identifier,
                     "name": repo_name,

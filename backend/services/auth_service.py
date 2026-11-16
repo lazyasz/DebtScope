@@ -137,6 +137,19 @@ def get_google_login_url(state: str) -> str:
     return params
 
 
+def _ensure_personal_workspace(db: Session, user: User) -> None:
+    """Create an owned workspace for a user who has none (idempotent)."""
+    from backend.database.models import Workspace, WorkspaceMembership
+
+    if db.query(WorkspaceMembership).filter(WorkspaceMembership.user_id == user.id).first():
+        return
+    ws_id = f"ws_{secrets.token_hex(6)}"
+    first_name = (user.full_name or user.email).split()[0]
+    db.add(Workspace(id=ws_id, name=f"{first_name}'s Workspace", slug=ws_id, owner_id=user.id, is_demo=False))
+    db.add(WorkspaceMembership(workspace_id=ws_id, user_id=user.id, role="OWNER"))
+    db.commit()
+
+
 async def exchange_google_code(code: str, db: Session) -> Tuple[User, str]:
     """
     Exchanges a Google authorization code for tokens.
@@ -215,6 +228,9 @@ async def exchange_google_code(code: str, db: Session) -> Tuple[User, str]:
         db.add(user)
     db.commit()
     db.refresh(user)
+
+    # 4b. Give first-time users their own empty workspace instead of the shared demo one
+    _ensure_personal_workspace(db, user)
 
     # 5. Mint app JWT
     app_jwt = mint_user_jwt({

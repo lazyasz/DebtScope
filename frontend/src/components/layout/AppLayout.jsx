@@ -7,6 +7,7 @@ import Header from './Header';
 import AuthModal from '../auth/AuthModal';
 import SettingsDrawer from '../integrations/SettingsDrawer';
 import ScanRepoModal from '../common/ScanRepoModal';
+import { isSampleMode, setSampleMode } from '../../services/api';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,6 +28,18 @@ export default function AppLayout() {
           onOpenScanModal={() => setScanModalOpen(true)}
         />
         
+        {isSampleMode() && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 bg-[#f0ecfc] text-[#3d2c78] text-xs border-b border-[#e2dcf7]">
+            <span>You're viewing <strong>sample data</strong> from a demo codebase.</span>
+            <button
+              onClick={() => { setSampleMode(false); window.location.assign('/dashboard'); }}
+              className="font-semibold underline cursor-pointer"
+            >
+              Back to my workspace
+            </button>
+          </div>
+        )}
+
         <main className="w-full flex-1">
           <AnimatePresence mode="wait">
             <motion.div

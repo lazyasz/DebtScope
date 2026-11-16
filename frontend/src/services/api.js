@@ -20,6 +20,24 @@ const apiClient = axios.create({
 
 export const USE_REAL_API = true;
 
+// "Explore sample data": read from the shared demo workspace instead of the user's own.
+const SAMPLE_KEY = 'debtscope_sample_mode';
+export function isSampleMode() {
+  try { return localStorage.getItem(SAMPLE_KEY) === '1'; } catch { return false; }
+}
+export function setSampleMode(on) {
+  try { on ? localStorage.setItem(SAMPLE_KEY, '1') : localStorage.removeItem(SAMPLE_KEY); } catch {}
+}
+apiClient.interceptors.request.use((config) => {
+  if (isSampleMode()) config.headers['X-Workspace-Id'] = 'ws_demo';
+  return config;
+});
+
+export async function getRepositories() {
+  const { data } = await apiClient.get('/api/repositories');
+  return data;
+}
+
 /**
  * Checks if the current session is operating in the seeded demo / sandbox workspace.
  */
@@ -65,7 +83,8 @@ export async function getFile(id) {
 }
 
 export async function scanRepository(url) {
-  const { data } = await apiClient.post('/api/repositories/scan', { url });
+  // Real scans fetch from GitHub and run the models; the 5 s default is far too short
+  const { data } = await apiClient.post('/api/repositories/scan', { url }, { timeout: 180000 });
   return data;
 }
 

@@ -87,7 +87,7 @@ class RepoScannerService:
         return owner, repo_name, canonical_url
 
     @classmethod
-    def scan_github_repository(cls, db: Session, repo_url: str) -> Dict[str, Any]:
+    def scan_github_repository(cls, db: Session, repo_url: str, workspace_id: str = "ws_demo") -> Dict[str, Any]:
         """
         Scans any public GitHub repository URL or Apache project key.
         Extracts live file trees, computes real AST metrics, applies real ML models,
@@ -107,12 +107,12 @@ class RepoScannerService:
                 matching = [p for p in known_projects if repo_name.lower() == p.lower() or repo_name.lower() in p.lower()]
                 if matching:
                     target_project = matching[0]
-                    return cls._ingest_gold_lakehouse_project(db, target_project, canonical_url)
+                    return cls._ingest_gold_lakehouse_project(db, target_project, canonical_url, workspace_id)
             except Exception as e:
                 print(f"[-] Lakehouse parquet lookup note: {e}")
 
         # Execute Live Scan via GitHub REST API & Real AST Analyzer
-        return cls._scan_live_github_api(db, owner, repo_name, canonical_url)
+        return cls._scan_live_github_api(db, owner, repo_name, canonical_url, workspace_id)
 
     @classmethod
     def _analyze_source_code(cls, code_text: str, file_path: str, language: str) -> Dict[str, Any]:
@@ -216,7 +216,7 @@ class RepoScannerService:
         }
 
     @classmethod
-    def _scan_live_github_api(cls, db: Session, owner: str, repo_name: str, repo_url: str) -> Dict[str, Any]:
+    def _scan_live_github_api(cls, db: Session, owner: str, repo_name: str, repo_url: str, workspace_id: str = "ws_demo") -> Dict[str, Any]:
         """Scans a live GitHub repo using GitHub REST API, file tree extraction, and real code analysis."""
         headers = {
             "Accept": "application/vnd.github.v3+json",
@@ -248,10 +248,12 @@ class RepoScannerService:
 
         # 2. Check / Create Repository record in DB
         repo = db.query(Repository).filter(
-            (Repository.name == repo_name) | (Repository.url == repo_url)
+            Repository.workspace_id == workspace_id,
+            (Repository.name == repo_name) | (Repository.url == repo_url),
         ).first()
         if not repo:
             repo = Repository(
+                workspace_id=workspace_id,
                 name=repo_name,
                 url=repo_url,
                 default_branch=default_branch
@@ -404,6 +406,7 @@ class RepoScannerService:
 
             if not src_file:
                 src_file = SourceFile(
+                    workspace_id=workspace_id,
                     repository_id=repo.id,
                     file_path=fpath,
                     file_name=fname,
@@ -427,6 +430,7 @@ class RepoScannerService:
             metric = db.query(EngineeringMetric).filter(EngineeringMetric.file_id == src_file.id).first()
             if not metric:
                 metric = EngineeringMetric(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     cyclomatic_complexity=complexity,
                     cognitive_complexity=cog_complexity,
@@ -450,6 +454,7 @@ class RepoScannerService:
             pred = db.query(MLPrediction).filter(MLPrediction.file_id == src_file.id).first()
             if not pred:
                 pred = MLPrediction(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     predicted_future_risk=min(100.0, round(defect_prob * 100.0, 1)),
                     defect_probability=defect_prob,
@@ -468,6 +473,7 @@ class RepoScannerService:
             biz = db.query(BusinessContext).filter(BusinessContext.file_id == src_file.id).first()
             if not biz:
                 biz = BusinessContext(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     business_criticality=biz_crit,
                     customer_impact=cust_imp,
@@ -485,6 +491,7 @@ class RepoScannerService:
                 existing_debt = db.query(TechnicalDebtItem).filter(TechnicalDebtItem.file_id == src_file.id).first()
                 if not existing_debt:
                     debt = TechnicalDebtItem(
+                        workspace_id=workspace_id,
                         file_id=src_file.id,
                         debt_category="COMPLEXITY" if complexity > 20 else "CODE_SMELL",
                         severity="CRITICAL" if complexity > 24 else "HIGH",
@@ -553,7 +560,7 @@ class RepoScannerService:
         }
 
     @classmethod
-    def _ingest_gold_lakehouse_project(cls, db: Session, project_id: str, repo_url: str) -> Dict[str, Any]:
+    def _ingest_gold_lakehouse_project(cls, db: Session, project_id: str, repo_url: str, workspace_id: str = "ws_demo") -> Dict[str, Any]:
         """Ingests a real Apache project directly from the Gold Lakehouse features using filtered streaming."""
         import pyarrow.parquet as pq
         
@@ -568,11 +575,12 @@ class RepoScannerService:
         )
         proj_df = table.to_pandas()
         if proj_df.empty:
-            return cls._scan_live_github_api(db, "apache", project_id, repo_url)
+            return cls._scan_live_github_api(db, "apache", project_id, repo_url, workspace_id)
 
-        repo = db.query(Repository).filter(Repository.name == project_id).first()
+        repo = db.query(Repository).filter(Repository.workspace_id == workspace_id, Repository.name == project_id).first()
         if not repo:
             repo = Repository(
+                workspace_id=workspace_id,
                 name=project_id,
                 url=repo_url,
                 default_branch="master"
@@ -609,6 +617,7 @@ class RepoScannerService:
 
             if not src_file:
                 src_file = SourceFile(
+                    workspace_id=workspace_id,
                     repository_id=repo.id,
                     file_path=fpath,
                     file_name=fname,
@@ -625,6 +634,7 @@ class RepoScannerService:
             metric = db.query(EngineeringMetric).filter(EngineeringMetric.file_id == src_file.id).first()
             if not metric:
                 metric = EngineeringMetric(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     cyclomatic_complexity=complexity,
                     cognitive_complexity=round(complexity * 1.3, 1),
@@ -641,6 +651,7 @@ class RepoScannerService:
             pred = db.query(MLPrediction).filter(MLPrediction.file_id == src_file.id).first()
             if not pred:
                 pred = MLPrediction(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     predicted_future_risk=min(100.0, round(defect_prob * 100.0, 1)),
                     defect_probability=defect_prob,
@@ -654,6 +665,7 @@ class RepoScannerService:
             biz = db.query(BusinessContext).filter(BusinessContext.file_id == src_file.id).first()
             if not biz:
                 biz = BusinessContext(
+                    workspace_id=workspace_id,
                     file_id=src_file.id,
                     business_criticality=biz_crit,
                     customer_impact=min(100.0, biz_crit * 0.9),
@@ -670,6 +682,7 @@ class RepoScannerService:
                 existing_debt = db.query(TechnicalDebtItem).filter(TechnicalDebtItem.file_id == src_file.id).first()
                 if not existing_debt:
                     debt = TechnicalDebtItem(
+                        workspace_id=workspace_id,
                         file_id=src_file.id,
                         debt_category="FAULT_INDUCING" if faults > 0 else "CODE_SMELL",
                         severity="CRITICAL" if faults > 2 else "HIGH",

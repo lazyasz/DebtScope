@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     # Security & CORS
     SECRET_KEY: str = "super-secret-key-change-in-production-2026"
+    # FRONTEND_URL is always added in main.py. Override as a JSON list, e.g.
+    # ALLOWED_ORIGINS='["https://app.example.com"]'. Never "*": cookies are sent cross-origin.
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
@@ -43,7 +45,6 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8501",
-        "*"
     ]
 
     # ── Auth ──────────────────────────────────────────────────────────────────
@@ -124,6 +125,11 @@ class Settings(BaseSettings):
     def _check_sandbox_production(self) -> "Settings":
         """Refuse to start with sandbox/simulated modes or insecure default secrets in production."""
         if self.ENVIRONMENT == "production":
+            if "*" in self.ALLOWED_ORIGINS:
+                raise RuntimeError(
+                    "ALLOWED_ORIGINS must not contain '*' when ENVIRONMENT=production "
+                    "(credentialed CORS would let any site act as the signed-in user)."
+                )
             if self.DEV_SANDBOX_AUTH:
                 raise RuntimeError(
                     "DEV_SANDBOX_AUTH=True is not allowed when ENVIRONMENT=production. "

@@ -64,13 +64,15 @@ async def ingest_service_criticality_from_notion(database_id: Optional[str] = No
                     results = res.json().get("results", [])
                     extracted_rules = []
                     for page in results:
-                        props = page.get("properties", {})
+                        # Notion column names often carry stray whitespace
+                        props = {k.strip(): v for k, v in page.get("properties", {}).items()}
                         # Extract service title / path pattern
                         title_prop = props.get("Service Name", {}).get("title", [])
                         service_name = title_prop[0].get("plain_text", "Service") if title_prop else "Service"
                         pattern_prop = props.get("Path Pattern", {}).get("rich_text", [])
                         pattern = pattern_prop[0].get("plain_text", f"*{service_name.lower()}*/**") if pattern_prop else f"*{service_name.lower()}*/**"
-                        tier_prop = props.get("Tier", {}).get("select", {})
+                        # docs/MANUAL_STEPS.md names the column "Criticality Tier"
+                        tier_prop = (props.get("Criticality Tier") or props.get("Tier") or {}).get("select", {})
                         tier_name = tier_prop.get("name", "Tier 2") if tier_prop else "Tier 2"
 
                         crit = 95.0 if "1" in tier_name else (80.0 if "2" in tier_name else 50.0)
@@ -166,18 +168,23 @@ async def sync_backlog_to_notion(components: List[Dict[str, Any]], database_id: 
                     res = await client.post("https://api.notion.com/v1/pages", json=payload, headers=headers)
                     if res.status_code in [200, 201]:
                         synced_items.append({"component": name, "page_id": res.json().get("id"), "status": "synced"})
-                except Exception:
-                    synced_items.append({"component": name, "page_id": f"notion_page_{int(time.time())}", "status": "synced_mock"})
+                    else:
+                        error = res.json().get("message", res.text) if res.content else f"HTTP {res.status_code}"
+                        synced_items.append({"component": name, "status": "failed", "error": error})
+                except Exception as e:
+                    synced_items.append({"component": name, "status": "failed", "error": str(e)})
 
-        if synced_items:
-            return {
-                "status": "success",
-                "mode": "live",
-                "database_id": db_id,
-                "synced_count": len(synced_items),
-                "items": synced_items,
-                "notion_url": f"https://www.notion.so/{db_id.replace('-', '')}"
-            }
+        # Live mode never falls back to mock data: report real failures to the caller.
+        synced_count = sum(1 for i in synced_items if i["status"] == "synced")
+        return {
+            "status": "success" if synced_count == len(synced_items) else ("partial" if synced_count else "error"),
+            "mode": "live",
+            "database_id": db_id,
+            "synced_count": synced_count,
+            "failed_count": len(synced_items) - synced_count,
+            "items": synced_items,
+            "notion_url": f"https://www.notion.so/{db_id.replace('-', '')}"
+        }
 
     # Interactive Mock / Sandbox Mode Response
     mock_pages = []
@@ -220,9 +227,10 @@ async def create_notion_audit_report(summary_data: Optional[Dict[str, Any]] = No
     notion_url = f"https://www.notion.so/workspace/audit-report-{report_id}"
 
 
+    # shortcut: report is never sent to Notion; publish it for real once a reports database exists
     return {
         "status": "success",
-        "mode": "sandbox_mock" if not settings.NOTION_API_KEY else "live",
+        "mode": "sandbox_mock",
         "report_id": report_id,
         "title": report_title,
         "notion_url": notion_url,
@@ -232,5 +240,5 @@ async def create_notion_audit_report(summary_data: Optional[Dict[str, Any]] = No
             "quick_wins": quick_wins,
             "critical_hotspots": hotspots
         },
-        "message": f"Executive Technical Debt Audit Page published to Notion workspace at {notion_url}"
+        "message": "Simulated report: not published to Notion (no reports database configured yet)."
     }

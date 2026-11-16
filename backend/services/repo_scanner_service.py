@@ -16,6 +16,7 @@ import numpy as np
 import requests
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
+from backend.config import settings
 from backend.services.code_analyzer import classify_file
 from backend.database.models import (
     Repository,
@@ -221,7 +222,7 @@ class RepoScannerService:
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "DebtScope-Engine/1.0"
         }
-        token = os.getenv("GITHUB_TOKEN")
+        token = settings.GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"token {token}"
 

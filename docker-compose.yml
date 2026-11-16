@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-debtscope}
       POSTGRES_USER: ${POSTGRES_USER:-debtscope_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-debtscope_secure_pass_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # local access only; never expose the DB publicly
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -30,10 +30,10 @@ services:
         condition: service_healthy
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-debtscope_admin}:${POSTGRES_PASSWORD:-debtscope_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-debtscope}
-      - SECRET_KEY=${SECRET_KEY:-8225d302375b6b0ca4f39d59f4d9f3a0b571a050792491192d186b4fcaf7013a}
-      - JWT_SECRET=${JWT_SECRET:-ab5823c6e3dc4749fdf60cecf0d6ff7107d9b86c962dc5871c065cc58f0ac59e}
-      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-debtscope_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-debtscope}
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY in .env}
       - DEV_SANDBOX_AUTH=${DEV_SANDBOX_AUTH:-False}
       - JIRA_SIMULATION_MODE=${JIRA_SIMULATION_MODE:-False}
       - NOTION_SIMULATION_MODE=${NOTION_SIMULATION_MODE:-False}
@@ -41,6 +41,9 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-["http://localhost:5173"]}
       - JIRA_CLIENT_ID=${JIRA_CLIENT_ID:-}
       - JIRA_CLIENT_SECRET=${JIRA_CLIENT_SECRET:-}
       - NOTION_CLIENT_ID=${NOTION_CLIENT_ID:-}

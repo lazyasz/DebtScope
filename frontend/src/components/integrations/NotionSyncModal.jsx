@@ -37,15 +37,12 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
       };
       const res = await syncNotion(payload);
       setResult(res);
-      notifyUser(`📑 Synced ${res.synced_count || 18} components to Notion workspace!`);
+      notifyUser(res.status === 'success'
+        ? `📑 Synced ${res.synced_count} components to Notion${res.mode === 'sandbox_mock' ? ' (simulated)' : ''}`
+        : `Notion sync failed for ${res.failed_count} of ${(res.items || []).length} components`);
     } catch (err) {
-      setResult({
-        status: 'synced',
-        mode: 'sandbox_mock',
-        synced_count: targetComponents.length || 18,
-        database_url: 'https://notion.so/workspace/notion_db_pei_backlog_2026',
-      });
-      notifyUser('📑 Synced to Notion (Sandbox Mode)!');
+      setResult({ status: 'error', message: err?.message || 'Request failed' });
+      notifyUser(`Notion sync failed: ${err?.message || 'request failed'}`);
     } finally {
       setLoading(false);
     }
@@ -63,15 +60,10 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
       };
       const res = await createNotionReport(payload);
       setResult(res);
-      notifyUser('📑 Executive Tech Debt Audit Report published to Notion!');
+      notifyUser(`📑 ${res.message || 'Report created'}`);
     } catch (err) {
-      setResult({
-        status: 'created',
-        mode: 'sandbox_mock',
-        page_title: reportTitle,
-        page_url: 'https://notion.so/workspace/tech_debt_audit_2026',
-      });
-      notifyUser('📑 Executive Report created in Notion (Sandbox Mode)!');
+      setResult({ status: 'error', message: err?.message || 'Request failed' });
+      notifyUser(`Report failed: ${err?.message || 'request failed'}`);
     } finally {
       setLoading(false);
     }
@@ -141,9 +133,14 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-[#161e10]">Notion Sync Successful!</h4>
+                <h4 className="text-base font-bold text-[#161e10]">
+                  {result.status === 'error' || result.status === 'partial'
+                    ? 'Notion Sync Failed'
+                    : result.mode === 'sandbox_mock' ? 'Simulated — not sent to Notion' : 'Notion Sync Successful!'}
+                </h4>
                 <p className="text-xs text-[#75786d] mt-1 font-mono">
-                  {result.synced_count ? `${result.synced_count} items synchronized` : 'Executive Report Published'}
+                  {result.message
+                    || (result.failed_count ? `${result.synced_count} synced, ${result.failed_count} failed` : `${result.synced_count ?? 0} items synchronized`)}
                 </p>
               </div>
               <div className="p-3 bg-[#f8faf6] rounded-2xl border border-[#d4dece] text-xs font-mono text-left space-y-1">

@@ -13,9 +13,9 @@ Stage-6 Effort Blend (separate post-processing step, NOT a 6th weight):
   w_E  = 0.15  → adjusts PS_base → PS_final; does NOT enter the 5D formula
 """
 
-from typing import List, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, model_validator
+from typing import Annotated, List, Optional
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "super-secret-key-change-in-production-2026"
     # FRONTEND_URL is always added in main.py. Override as a JSON list, e.g.
     # ALLOWED_ORIGINS='["https://app.example.com"]'. Never "*": cookies are sent cross-origin.
-    ALLOWED_ORIGINS: List[str] = [
+    ALLOWED_ORIGINS: Annotated[List[str], NoDecode] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8000",
@@ -122,6 +122,18 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-flash-latest"
     ANTHROPIC_API_KEY: str = ""
 
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def _parse_origins(cls, v):
+        """Accept a JSON list or a comma-separated string (hosting dashboards make JSON easy to mangle)."""
+        if isinstance(v, str):
+            s = v.strip()
+            if s.startswith("["):
+                import json
+                return json.loads(s)
+            return [o.strip() for o in s.split(",") if o.strip()]
+        return v
 
     @model_validator(mode="after")
     def _check_sandbox_production(self) -> "Settings":

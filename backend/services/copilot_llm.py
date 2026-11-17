@@ -408,7 +408,7 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
     """
 
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        self.api_key = (api_key or "").strip()  # a pasted key often carries a trailing space
 
     async def stream_chat(
         self,

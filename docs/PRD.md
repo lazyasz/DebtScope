@@ -128,7 +128,9 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 | GitHub token | Repo scanning (5,000 req/h) | ✅ Live | Render env + `.env` |
 | Notion API key + DB ID | Read service tiers ✅; write backlog ❌ | Partial | Render env + `.env` |
 | Gemini API key | AI Copilot | ⚠️ Key valid; Gemini returned "high demand" during tests | Render env + `.env` |
-| Jira (domain, email, API token) | Tickets from priorities | ❌ Not set — shows *Simulated* | not set |
+| GitHub OAuth app | Each user connects their own GitHub, lists their repos | ✅ Live (tested) | Render env `GITHUB_CLIENT_ID/SECRET` |
+| Notion OAuth app | Each user connects their own Notion, lists their databases | ✅ Live (tested) | Render env `NOTION_CLIENT_ID/SECRET` |
+| Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ⚠️ Keys live; test account has no Jira site (Atlassian: "Access denied") | Render env `JIRA_CLIENT_ID/SECRET` |
 | Render | Hosting + Postgres | ✅ Live (free tier: sleeps after ~15 min idle) | — |
 
 ---
@@ -136,13 +138,13 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 ## 9. Remaining work (priority order)
 
 **Must (before demo)**
-1. Rotate keys that were pasted in chat (GitHub, Notion, Gemini, Google secret) → update Render env + `.env`.
+1. Rotate keys that were pasted in chat (GitHub token, Notion key, Gemini, Google secret, GitHub/Notion/Jira OAuth secrets) → update Render env + `.env`.
 2. (Done) Integrations and Data Quality pages; in-app keys drawer removed (it overwrote server keys).
 3. Verify AI Copilot answers live on Render (or show a clear "AI unavailable, try again" state).
-4. Remove leftover jargon labels on Dashboard hero ("DebtScope Telemetry Engine", "v4.18.2 · Active Mesh").
+4. (Done) Sidebar/scan-dialog jargon and fake "System Health 94.2%" removed. Executive PDF report on Simulator still uses invented dollar figures.
 
 **Should**
-5. Jira: create free Atlassian site + API token → set `JIRA_DOMAIN`, `JIRA_EMAIL`, `JIRA_API_TOKEN` on Render.
+5. Jira: create a free Jira Cloud site on the Atlassian account, then **Connect Jira** on Integrations. Scans still use the server's GitHub token (public repos only); Notion/Jira *sync* still uses sample data.
 6. Notion backlog DB (needs guide approval): separate `NOTION_BACKLOG_DATABASE_ID` for sync; real report publishing.
 7. Audit Simulator and Data Quality pages.
 8. Store scan history so the Dashboard risk trend can show real data.

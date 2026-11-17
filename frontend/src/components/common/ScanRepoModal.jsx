@@ -47,14 +47,14 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
     setLoading(true);
     setError(null);
     setResult(null);
-    setLoadingStep('Connecting to GitHub API & fetching file tree...');
+    setLoadingStep('Fetching the repository from GitHub...');
 
     const stepTimer1 = setTimeout(() => {
-      setLoadingStep('Performing AST lexical analysis & complexity profiling...');
+      setLoadingStep('Measuring how complex each file is...');
     }, 1200);
 
     const stepTimer2 = setTimeout(() => {
-      setLoadingStep('Evaluating SZZ Random Forest ML defect predictor...');
+      setLoadingStep('Predicting which files are most likely to break...');
     }, 2400);
 
     try {
@@ -112,7 +112,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-[#161e10] leading-tight">Live Repository Scanner</h3>
-              <p className="text-xs text-[#45483e]">Extract live AST metrics, code complexity, and SZZ ML defect risk from any GitHub repository</p>
+              <p className="text-xs text-[#45483e]">Paste a public GitHub link. We'll find the files most likely to cause bugs.</p>
             </div>
           </div>
           <button
@@ -152,7 +152,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>Scan AST</span>
+                  <span>Scan</span>
                 </>
               )}
             </button>
@@ -164,7 +164,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
               <Loader2 className="w-5 h-5 text-[#43562b] animate-spin shrink-0" />
               <div>
                 <p className="text-xs font-bold text-[#2d3f16]">{loadingStep || 'Processing repository...'}</p>
-                <p className="text-[11px] text-[#556437]">Querying GitHub AST trees, measuring branch complexity, and running ML inference</p>
+                <p className="text-[11px] text-[#556437]">Reading files, measuring complexity and predicting risk. Large repositories can take a minute or two.</p>
               </div>
             </div>
           )}
@@ -264,7 +264,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
                   </span>
                 </div>
                 <div className="p-3.5 bg-white rounded-2xl shadow-xs border border-[#d4dece]">
-                  <span className="text-[10px] text-[#75786d] uppercase font-bold block">Avg AST Complexity</span>
+                  <span className="text-[10px] text-[#75786d] uppercase font-bold block">Avg complexity</span>
                   <span className="text-lg font-extrabold text-[#161e10]">
                     {result.summary?.avg_cyclomatic_complexity || 0}
                   </span>

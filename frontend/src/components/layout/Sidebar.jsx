@@ -67,7 +67,7 @@ export default function Sidebar({ open, onClose, onOpenScanModal }) {
           </div>
           <div>
             <h1 className="text-sm font-bold text-[#0f1015] tracking-tight">DebtScope</h1>
-            <p className="text-[10px] font-mono text-[#5b42a5] font-semibold leading-tight">Intelligence Mesh</p>
+            <p className="text-[10px] text-[#5b42a5] font-semibold leading-tight">Find what to fix first</p>
           </div>
         </div>
 
@@ -106,10 +106,10 @@ export default function Sidebar({ open, onClose, onOpenScanModal }) {
           <div className="p-3.5 bg-[#f8f9fb] rounded-xl border border-[#e2e4ea] space-y-2">
             <div className="flex items-center gap-2 text-[#0f1015]">
               <GitBranch className="w-4 h-4 text-[#7048e8]" />
-              <span className="text-xs font-bold">Repository Scanner</span>
+              <span className="text-xs font-bold">Scan a repository</span>
             </div>
             <p className="text-[11px] text-[#525866] leading-snug">
-              Analyze AST metrics & ML risk for public GitHub repositories.
+              Paste a public GitHub link to find risky files.
             </p>
             <button
               onClick={() => {
@@ -119,26 +119,11 @@ export default function Sidebar({ open, onClose, onOpenScanModal }) {
               className="w-full mt-1 py-1.5 px-3 bg-white hover:bg-[#f0ecfc] text-[#5b42a5] text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 border border-[#e2e4ea] cursor-pointer"
             >
               <Zap className="w-3.5 h-3.5 text-[#7048e8]" />
-              <span>Scan Repository AST</span>
+              <span>Scan repository</span>
             </button>
           </div>
         </div>
 
-        {/* System Health Footer */}
-        <div className="p-3.5 m-3 bg-[#f8f9fb] rounded-xl border border-[#e2e4ea]">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold text-[#0f1015]">System Health</span>
-            <span className="bg-[#f0ecfc] text-[#5b42a5] px-1.5 py-0.2 rounded font-mono text-[10px] font-bold">
-              94.2%
-            </span>
-          </div>
-          <div className="w-full bg-[#e2e4ea] rounded-full h-1.5 overflow-hidden">
-            <div className="bg-[#7048e8] h-full rounded-full w-[94.2%]"></div>
-          </div>
-          <p className="text-[10px] text-[#88909e] mt-1.5 leading-tight font-mono">
-            AST defect triage active across 48 services.
-          </p>
-        </div>
       </aside>
     </>
   );

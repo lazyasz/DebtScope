@@ -113,7 +113,7 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search telemetry, modules, hot-zones (⌘K)..."
+              placeholder="Search files (⌘K)..."
               className="bg-transparent border-none text-xs text-[#0f1015] placeholder-[#88909e] focus:outline-none w-full"
             />
             <span className="hidden lg:inline-block bg-white border border-[#e2e4ea] font-mono text-[10px] text-[#525866] px-1.5 py-0.5 rounded font-semibold shrink-0 ml-2">

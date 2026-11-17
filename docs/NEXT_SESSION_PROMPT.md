@@ -21,6 +21,8 @@ the source of truth for users, flows, pages, APIs, status and remaining work.
 - Done: Google sign-in (published, any account), personal workspaces, Get started screen,
   real data on Dashboard / Priorities / Hotspots / Risk Predictions, honest Jira/Notion
   dialogs, production refuses anonymous data access, Privacy/Terms pages.
+- Done: per-user OAuth on Integrations — GitHub and Notion connect live; Jira keys live but the
+  Atlassian account needs a Jira Cloud site before Connect Jira works.
 
 ## Rules (keep these)
 1. No invented numbers anywhere. Missing data → "—" or a helpful empty state.

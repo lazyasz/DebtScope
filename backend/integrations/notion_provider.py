@@ -213,7 +213,11 @@ class NotionProvider(IntegrationProvider):
                 if res.status_code == 200:
                     created.append({"component": component, "url": res.json().get("url")})
                 else:
-                    errors.append(f"{component}: {res.json().get('message', res.status_code)}")
+                    msg = str(res.json().get("message", res.status_code))
+                    if "cannot be parented" in msg:
+                        # Special Notion databases (e.g. the People directory) reject new rows from integrations
+                        raise ValueError("Notion doesn't let apps add rows to this database. Pick a normal database (or create one) and share it with DebtScope.")
+                    errors.append(f"{component}: {msg}")
         if not created:
             raise ValueError(errors[0] if errors else "Notion created no pages.")
         return {"status": "success", "mode": "live", "synced_count": len(created), "pages": created, "errors": errors}

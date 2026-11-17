@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     COPILOT_LLM_PROVIDER: str = "gemini"  # 'gemini' or 'claude'
     GEMINI_API_KEY: str = ""
     # Google retires model versions; override without a code change when that happens
-    GEMINI_MODEL: str = "gemini-flash-latest"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
     ANTHROPIC_API_KEY: str = ""
 
 

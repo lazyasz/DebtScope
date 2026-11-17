@@ -86,8 +86,12 @@ export default function CopilotShell() {
 
     setMessages((prev) => [...prev, initialAssistantMsg]);
 
+    // Give up after 90 s so a dropped connection never leaves the answer spinning forever
+    const controller = new AbortController();
+    const giveUp = setTimeout(() => controller.abort(), 90000);
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/copilot/chat`, {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -176,12 +180,15 @@ export default function CopilotShell() {
           m.id === assistantMsgId
             ? {
                 ...m,
-                error: 'The AI couldn\'t be reached. Check your connection and try again.',
+                error: err?.name === 'AbortError'
+                  ? 'The AI took too long to answer. Please try again.'
+                  : 'The AI couldn\'t be reached. Check your connection and try again.',
               }
             : m
         )
       );
     } finally {
+      clearTimeout(giveUp);
       setLoading(false);
       setActiveTool(null);
     }

@@ -58,7 +58,9 @@ What makes it different from code-quality tools (e.g. SonarQube): it combines **
 
 ### Flow D — Act on it
 - **Export to Jira** (one file or bulk) — creates real tickets in the user's own connected Jira project (picked from their projects; verified live: KAN-4); without a connection it clearly says *Simulated*.
-- **Sync to Notion** — writes the backlog to Notion (needs the backlog database, §9).
+- **Send to Notion** — adds one page per file to a database the user picks from their own connected Notion; without a connection it says *Simulated*.
+- **File search** (header) — type part of a file name to jump to that file.
+- **Ask AI** (Dashboard, Hotspots, File details) — opens the Copilot already asking how to fix that file.
 - **AI Copilot** — ask "why is X ranked #1?" or "how do I fix X?" (Gemini).
 
 ### Flow E — Explore without a repo
@@ -126,7 +128,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 |---|---|---|---|
 | Google OAuth | Sign-in | ✅ Live, published (any Google account) | Render env + local `.env` |
 | GitHub token | Repo scanning (5,000 req/h) | ✅ Live | Render env + `.env` |
-| Notion API key + DB ID | Read service tiers ✅; write backlog ❌ | Partial | Render env + `.env` |
+| Notion API key + DB ID | Optional shared service-tier import (admin table) | ✅ Live | Render env + `.env` |
 | Gemini API key | AI Copilot | ✅ Live (new key "DebtScope Copilot", Nov 17) | Render env + `.env` |
 | GitHub OAuth app | Each user connects their own GitHub, lists their repos | ✅ Live (tested) | Render env `GITHUB_CLIENT_ID/SECRET` |
 | Notion OAuth app | Each user connects their own Notion, lists their databases | ✅ Live (tested) | Render env `NOTION_CLIENT_ID/SECRET` |
@@ -144,8 +146,8 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 4. (Done) Sidebar/scan-dialog jargon and fake "System Health 94.2%" removed; Executive PDF with invented dollar figures removed.
 
 **Should**
-5. (Done) Jira connects per user. Scans still use the server's GitHub token (public repos only); Notion/Jira *sync* still uses sample data.
-6. Notion backlog DB (needs guide approval): separate `NOTION_BACKLOG_DATABASE_ID` for sync; real report publishing.
+5. (Done) GitHub, Notion and Jira connect per user; scans use the user's own GitHub (private repos); Jira export creates real tickets; Notion export adds real pages.
+6. (Done) Full audit (Nov 17): removed fake badges, persona sign-in dialog, template recipes, illustrative formula and orphan Technical debt page; fixed a login redirect loop.
 7. (Done) Simulator rebuilt on real data. Scans use the user's own GitHub connection (private repos), not yet tested on a private repo.
 8. Store scan history so the Dashboard risk trend can show real data.
 

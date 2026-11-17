@@ -387,16 +387,16 @@ class JiraProvider(IntegrationProvider):
 
     async def get_resources(self, connection: Optional[IntegrationConnection], query: Optional[str] = None) -> Dict[str, Any]:
         """Lists Jira projects on the sites the user's own Atlassian connection can access."""
-        token = TokenSecurity.decrypt(connection.access_token_enc) if connection else None
-        if not token:
+        if not connection or not connection.access_token_enc:
             return {"projects": [], "total_count": 0, "error": "Not connected"}
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         projects = []
         async with httpx.AsyncClient(timeout=15.0) as client:
-            sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers=headers)
-            if sites.status_code != 200:
-                return {"projects": [], "total_count": 0, "error": f"Atlassian returned {sites.status_code}; try reconnecting."}
-            for site in sites.json():
+            try:
+                token, sites = await self._sites_with_fresh_token(client, connection)
+            except PermissionError as e:
+                return {"projects": [], "total_count": 0, "error": str(e)}
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+            for site in sites:
                 resp = await client.get(
                     f"https://api.atlassian.com/ex/jira/{site['id']}/rest/api/3/project/search",
                     headers=headers,
@@ -453,24 +453,32 @@ class JiraProvider(IntegrationProvider):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+    async def _sites_with_fresh_token(self, client: httpx.AsyncClient, connection: IntegrationConnection):
+        """Returns (token, sites); renews the 1-hour Atlassian token with the refresh token when needed."""
+        from sqlalchemy.orm import object_session
+        token = TokenSecurity.decrypt(connection.access_token_enc)
+        sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
+        if sites.status_code == 401 and connection.refresh_token_enc:
+            # Refresh tokens rotate, so store the new one too
+            fresh = await self.refresh_token(TokenSecurity.decrypt(connection.refresh_token_enc))
+            if not fresh.get("access_token"):
+                raise PermissionError("Your Jira sign-in expired. Disconnect and connect Jira again.")
+            token = fresh["access_token"]
+            connection.access_token_enc = TokenSecurity.encrypt(token)
+            connection.refresh_token_enc = TokenSecurity.encrypt(fresh["refresh_token"])
+            object_session(connection).commit()
+            sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
+        if sites.status_code != 200:
+            raise PermissionError("Couldn't reach your Jira site. Disconnect and connect Jira again.")
+        return token, sites.json()
+
     async def create_issues(self, connection: IntegrationConnection, db: Session, project_key: Optional[str], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Creates real issues in the user's own Jira site with their OAuth token."""
         async with httpx.AsyncClient(timeout=20.0) as client:
-            token = TokenSecurity.decrypt(connection.access_token_enc)
-            sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
-            if sites.status_code == 401 and connection.refresh_token_enc:
-                # Atlassian access tokens last 1 hour; refresh tokens rotate, so store the new one
-                fresh = await self.refresh_token(TokenSecurity.decrypt(connection.refresh_token_enc))
-                if not fresh.get("access_token"):
-                    raise PermissionError("Your Jira sign-in expired. Disconnect and connect Jira again.")
-                token = fresh["access_token"]
-                connection.access_token_enc = TokenSecurity.encrypt(token)
-                connection.refresh_token_enc = TokenSecurity.encrypt(fresh["refresh_token"])
-                db.commit()
-                sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
-            if sites.status_code != 200 or not sites.json():
-                raise PermissionError("Couldn't reach your Jira site. Disconnect and connect Jira again.")
-            site = sites.json()[0]
+            token, sites = await self._sites_with_fresh_token(client, connection)
+            if not sites:
+                raise PermissionError("Your Atlassian account has no Jira site.")
+            site = sites[0]
             api = f"https://api.atlassian.com/ex/jira/{site['id']}/rest/api/3"
             headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 

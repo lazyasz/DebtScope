@@ -12,6 +12,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
 
   const [projectKey, setProjectKey] = useState('');
   const [projects, setProjects] = useState(null); // null = loading, [] = none/not connected
+  const [projectsError, setProjectsError] = useState(null);
   const [issueType, setIssueType] = useState('Task');
   const sprintName = 'DebtScope priorities';
 
@@ -20,6 +21,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
     getProviderResources('jira')
       .then((r) => {
         const list = r.connected ? r.projects || [] : [];
+        setProjectsError(r.connected && !list.length ? r.error || 'No projects found in your Jira.' : null);
         setProjects(list);
         if (list.length) setProjectKey((k) => k || list[0].key);
       })
@@ -198,6 +200,8 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                   <label className="block text-[#45483e] font-semibold mb-1">Jira project</label>
                   {projects === null ? (
                     <p className="text-[#75786d]">Loading your Jira projects…</p>
+                  ) : projectsError ? (
+                    <p className="text-[#855300]">{projectsError}</p>
                   ) : projects.length === 0 ? (
                     <p className="text-[#855300]">Jira isn't connected, so this will only be simulated. Connect Jira on the Integrations page to create real tickets.</p>
                   ) : (

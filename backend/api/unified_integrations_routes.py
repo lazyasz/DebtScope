@@ -100,6 +100,7 @@ async def get_ecosystem_status(db: Session = Depends(get_db)):
             }
         },
         "github": gh_status,
+        "github_token_configured": bool(settings.GITHUB_TOKEN),
         "jira": jira_status,
         "notion": notion_status,
         "timestamp": datetime.utcnow().isoformat()

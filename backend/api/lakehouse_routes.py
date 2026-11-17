@@ -77,8 +77,11 @@ def get_data_quality_audit():
         except Exception:
             records = []
 
+    source = "pipeline_database"
     if not records:
+        # Stored snapshot of an earlier pipeline run, not computed now
         records = DEFAULT_AUDIT_LOGS
+        source = "stored_snapshot"
 
     passed_count = sum(1 for r in records if r["passed"])
     total_count = len(records)
@@ -89,7 +92,8 @@ def get_data_quality_audit():
         "passed_checks": passed_count,
         "failed_checks": total_count - passed_count,
         "pass_rate_pct": pass_rate,
-        "audit_logs": records
+        "audit_logs": records,
+        "source": source,
     }
 
 @router.get("/lineage-overview", summary="Get Medallion Lakehouse Layer Lineage Statistics")

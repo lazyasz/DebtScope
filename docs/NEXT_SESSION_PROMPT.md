@@ -14,7 +14,7 @@ the source of truth for users, flows, pages, APIs, status and remaining work.
 - Live: https://debtscope.onrender.com (Render, Docker, Postgres; auto-deploys on push)
 - Repo: lazyasz/DebtScope, branch workstream/ws1-evidence-closeout. My GitHub (Adesh0512)
   has write access and is logged in via `gh`. Commit and push when a step is done.
-- Backend: FastAPI in backend/ (tests: `.venv/bin/python -m pytest -q`, 188 passing).
+- Backend: FastAPI in backend/ (tests: `.venv/bin/python -m pytest -q`, 189 passing).
   Frontend: React/Vite in frontend/ (`npm run build` → served by the backend).
 - Local run: `.venv/bin/python -m uvicorn backend.main:app --port 8000`, then
   http://localhost:8000. Rebuild the frontend after UI changes.
@@ -36,9 +36,7 @@ the source of truth for users, flows, pages, APIs, status and remaining work.
 ## Tasks, in order
 1. (DONE) File details page. Also fix Data Quality: frontend calls /lakehouse/* — must be
    /api/lakehouse/* (frontend/src/pages/DataQuality.jsx).
-2. Integrations page (frontend/src/pages/IntegrationsHub.jsx): ~10 fake actions. Show real
-   connection status from GET /integrations/status; buttons either work or clearly say
-   "Not connected — here's how to connect".
+2. (DONE) Integrations page and Data Quality page.
 3. Dashboard hero: remove "DebtScope Telemetry Engine", "v4.18.2 · Active Mesh", the decorative
    radar; replace with a one-line plain summary and the Scan button.
 4. AI Copilot: test a real question on the live site. If Gemini fails, show a clear

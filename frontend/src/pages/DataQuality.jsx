@@ -27,9 +27,9 @@ export default function DataQuality() {
     try {
       setLoading(true);
       const [auditRes, lineageRes, mlRes] = await Promise.all([
-        apiClient.get('/lakehouse/quality-audit').catch(() => ({ data: null })),
-        apiClient.get('/lakehouse/lineage-overview').catch(() => ({ data: null })),
-        apiClient.get('/lakehouse/ml-metrics').catch(() => ({ data: null })),
+        apiClient.get('/api/lakehouse/quality-audit').catch(() => ({ data: null })),
+        apiClient.get('/api/lakehouse/lineage-overview').catch(() => ({ data: null })),
+        apiClient.get('/api/lakehouse/ml-metrics').catch(() => ({ data: null })),
       ]);
 
       if (auditRes?.data) setAuditData(auditRes.data);
@@ -61,13 +61,17 @@ export default function DataQuality() {
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#d3ebb2] text-[#2d3f16] tracking-wide uppercase">
               Data Governance & MLOps
             </span>
-            <span className="text-xs font-mono text-[#75786d]">• PROMISE '19 Verified</span>
+            {auditData?.source === 'stored_snapshot' && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#fdf2e7] text-[#855300] border border-[#f3d9b1]">
+                Stored snapshot of an earlier pipeline run — not computed live
+              </span>
+            )}
           </div>
           <h1 className="text-2xl font-black text-[#161e10] tracking-tight">
             Data Lineage & Quality Gates
           </h1>
           <p className="text-xs text-[#585c51]">
-            Multi-stage automated validation between Bronze, Silver, and Gold Medallion Lakehouse layers.
+            Checks run by the data pipeline that trains the defect model (Bronze raw → Silver cleaned → Gold features).
           </p>
         </div>
 
@@ -93,9 +97,9 @@ export default function DataQuality() {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[#161e10]">{auditData?.pass_rate_pct ?? 100.0}%</span>
+            <span className="text-3xl font-black text-[#161e10]">{auditData?.pass_rate_pct ?? '—'}%</span>
             <span className="text-xs font-bold text-[#43562b] bg-[#d3ebb2] px-2 py-0.5 rounded-full">
-              {auditData?.passed_checks ?? 12}/{auditData?.total_checks ?? 12} Passed
+              {auditData?.passed_checks ?? '—'}/{auditData?.total_checks ?? '—'} Passed
             </span>
           </div>
           <p className="mt-1 text-[11px] text-[#75786d]">Zero synthetic formula target leakage</p>
@@ -248,7 +252,7 @@ export default function DataQuality() {
             <p className="text-xs text-[#75786d]">Execution assertions persisted to SQLite and Parquet audit stores.</p>
           </div>
           <span className="text-xs font-mono text-[#556437] bg-[#edf1e8] px-3 py-1 rounded-xl w-fit">
-            Run ID: {auditData?.audit_logs?.[0]?.run_id || 'DQ-ACTIVE'}
+            Run ID: {auditData?.audit_logs?.[0]?.run_id || '—'}
           </span>
         </div>
 

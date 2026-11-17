@@ -3,6 +3,8 @@ Machine Learning Predictions API endpoints.
 Provides model risk ingestion interfaces for Member 2 ML Engine.
 """
 
+import os
+from functools import lru_cache
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -18,6 +20,44 @@ from backend.services.prediction_service import PredictionService
 from backend.services.data_service import DataService
 
 router = APIRouter(prefix="/predictions", tags=["ML Predictions (Member 2 Engine)"])
+
+
+@lru_cache(maxsize=1)
+def _model_info() -> dict:
+    """Facts about the defect model scans actually use, read from its saved bundle."""
+    import joblib
+    from backend.services.repo_scanner_service import RepoScannerService
+
+    path = os.path.join(RepoScannerService.MODELS_DIR, "real_defect_predictor.pkl")
+    bundle = joblib.load(path)
+    model = bundle["model"]
+    importances = getattr(model, "feature_importances_", [])
+    features = sorted(
+        ({"feature": n, "importance": round(float(w), 4)} for n, w in zip(bundle["feature_names"], importances)),
+        key=lambda f: -f["importance"],
+    )
+    m = bundle.get("metrics", {})
+    return {
+        "algorithm": type(model).__name__,
+        "n_estimators": getattr(model, "n_estimators", None),
+        "target": bundle.get("target_name"),
+        "trained_at": bundle.get("trained_at"),
+        "r2": m.get("rf_r2"),
+        "cv_r2_mean": m.get("cv_r2_mean"),
+        "mae": m.get("rf_mae"),
+        "rmse": m.get("rf_rmse"),
+        "baseline_mae": m.get("dummy_mae"),
+        "mae_improvement_pct": m.get("mae_improvement_pct"),
+        "features": features,
+    }
+
+
+@router.get("/model-info", summary="Defect model details (algorithm, accuracy, feature importances)")
+def get_model_info(workspace: Workspace = Depends(get_current_workspace)):
+    try:
+        return _model_info()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Model unavailable: {e}")
 
 
 @router.get("", response_model=List[MLPredictionResponse])

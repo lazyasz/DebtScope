@@ -78,3 +78,10 @@ class HotspotResponse(BaseModel):
     quadrant: str
     hotspot_type: str # e.g. "TECHNICAL_CRITICAL", "BUSINESS_CRITICAL", "BALANCED_HOTSPOT"
     summary: str
+    # Measured per-file metrics (None when the scan didn't record them)
+    lines_of_code: Optional[int] = None
+    cyclomatic_complexity: Optional[float] = None
+    code_smells_count: Optional[int] = None
+    duplication_pct: Optional[float] = None
+    churn_commits: Optional[int] = None
+    churn_provenance: Optional[str] = None

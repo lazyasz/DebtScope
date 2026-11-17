@@ -33,6 +33,11 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+export async function getModelInfo() {
+  const { data } = await apiClient.get('/api/predictions/model-info');
+  return data;
+}
+
 export async function getDashboardSummary() {
   const { data } = await apiClient.get('/api/metrics/dashboard');
   return data;

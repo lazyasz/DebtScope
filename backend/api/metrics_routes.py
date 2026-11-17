@@ -167,6 +167,12 @@ def get_hotspots(
                 quadrant=score.quadrant,
                 hotspot_type=h_type,
                 summary=summary,
+                lines_of_code=f.lines_of_code,
+                cyclomatic_complexity=f.metrics.cyclomatic_complexity if f.metrics else None,
+                code_smells_count=f.metrics.code_smells_count if f.metrics else None,
+                duplication_pct=f.metrics.duplication_pct if f.metrics else None,
+                churn_commits=f.metrics.code_churn_commits if f.metrics else None,
+                churn_provenance=f.metrics.churn_provenance if f.metrics else None,
             )
         )
 

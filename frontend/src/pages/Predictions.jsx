@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePredictions } from '../hooks/usePredictions';
-import { useAuth } from '../context/AuthContext';
+import { getModelInfo, getPriorities } from '../services/api';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
@@ -35,8 +35,14 @@ import {
 
 export default function Predictions() {
   const { data, loading, error } = usePredictions();
-  const { notify } = useAuth();
   const navigate = useNavigate();
+  const [model, setModel] = useState(null);
+  const [ranked, setRanked] = useState([]);
+
+  useEffect(() => {
+    getModelInfo().then(setModel).catch(() => setModel(null));
+    getPriorities('source').then((r) => setRanked(r || [])).catch(() => setRanked([]));
+  }, []);
 
   // Interactive Live Defect Simulator State
   const [simLoc, setSimLoc] = useState(850);
@@ -46,7 +52,9 @@ export default function Predictions() {
 
   if (loading) return <LoadingState message="Loading ML defect regression model and SHAP drivers..." />;
   if (error) return <ErrorState message={error} />;
-  if (!data) return <EmptyState title="No prediction data available" />;
+  if (!data || data.length === 0) {
+    return <EmptyState title="No predictions yet" message="Scan a repository and the defect model will score each of its files." />;
+  }
 
   // Real-time simulated defect probability calculation
   const calcDefectProb = () => {
@@ -59,19 +67,32 @@ export default function Predictions() {
     return Math.min(Math.round(prob * 0.9 + (simComplexity * 0.8)), 100);
   };
 
-  const featureImportanceData = [
-    { feature: 'Cyclomatic Complexity', weight: 34, color: '#384a24' },
-    { feature: 'Recent Code Churn', weight: 28, color: '#4d6332' },
-    { feature: 'Lines of Code (LOC)', weight: 22, color: '#687e45' },
-    { feature: 'Author Entropy', weight: 16, color: '#889d62' },
-  ];
+  const pretty = (f) => f.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const GREENS = ['#384a24', '#4d6332', '#687e45', '#889d62', '#a3b57f', '#bccb9c'];
+  const featureImportanceData = (model?.features || []).slice(0, 6).map((f, i) => ({
+    feature: pretty(f.feature),
+    weight: Math.round(f.importance * 1000) / 10,
+    color: GREENS[i],
+  }));
+  const topFeature = model?.features?.[0];
+  const probs = data.map((p) => p.defect_probability).filter((v) => typeof v === 'number');
+  const avgDefectPct = probs.length ? (100 * probs.reduce((a, b) => a + b, 0)) / probs.length : 0;
+  const highRiskCount = probs.filter((v) => v >= 0.5).length;
+  const trainedOn = model?.trained_at ? new Date(model.trained_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const fmt = (v, d = 2) => (typeof v === 'number' ? v.toFixed(d) : '—');
 
-  const atRiskFiles = data.at_risk_files || [
-    { id: 1, file: 'services/auth_service/auth.go', current_risk: 72, predicted_risk: 89, confidence: 0.94, risk_delta: 17, risk_factors: ['High Churn', 'God Method'] },
-    { id: 2, file: 'pipeline/analytics/spark_aggregator.py', current_risk: 68, predicted_risk: 84, confidence: 0.92, risk_delta: 16, risk_factors: ['High Complexity', 'Low Unit Test Coverage'] },
-    { id: 3, file: 'api/routes/transaction_billing.py', current_risk: 65, predicted_risk: 79, confidence: 0.89, risk_delta: 14, risk_factors: ['Cyclomatic > 30', 'Rapid Mutation'] },
-    { id: 4, file: 'models/decision_matrix_calculator.py', current_risk: 58, predicted_risk: 72, confidence: 0.91, risk_delta: 14, risk_factors: ['Duplication', 'Nested Conditionals'] },
-  ];
+  const atRiskFiles = [...ranked]
+    .sort((a, b) => (b.predicted_risk ?? 0) - (a.predicted_risk ?? 0))
+    .slice(0, 8)
+    .map((r) => ({
+      id: r.file_id,
+      file: r.file_path,
+      current_risk: (r.technical_risk ?? 0).toFixed(1),
+      predicted_risk: (r.predicted_risk ?? 0).toFixed(1),
+      risk_delta: ((r.predicted_risk ?? 0) - (r.technical_risk ?? 0)).toFixed(1),
+      confidence: r.confidence_score ?? 0,
+      level: r.priority_level || '—',
+    }));
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 max-w-[1720px] mx-auto animate-fade-in">
@@ -82,20 +103,17 @@ export default function Predictions() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#e8f1db] text-[#2d3f16] font-mono text-xs font-bold tracking-wider uppercase border border-[#c5c8ba]/60">
               <span className="w-2 h-2 rounded-full bg-[#43562b] animate-pulse"></span>
-              Supervised AST Random Forest Regressor
+              {model ? `${pretty(model.algorithm.replace('Regressor', ' regressor'))} · ${model.n_estimators} trees` : 'Defect model'}
             </span>
             <span className="text-xs text-[#45483e] font-mono px-2.5 py-0.5 rounded-full bg-[#edf1e8] border border-[#d4dece]">
-              Model v4.2.8
-            </span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#d3e4ac] text-[#2d3f16] font-mono font-bold">
-              Inference: 4.8ms
+              Trained {trainedOn}
             </span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold text-[#161e10] tracking-tight">
-            Telemetry Intelligence & Defect Predictor
+            Defect Risk Predictions
           </h1>
           <p className="text-sm text-[#45483e] max-w-3xl">
-            Predictive regression engine calibrated against 24 months of Jira bug reports, AST mutation cycles, and GitHub commit velocity across 48 microservices.
+            A machine-learning model estimates how many faults each file is likely to contain, from its size, change history and author activity. Scores are relative (uncalibrated): use them to compare files, not as exact bug counts.
           </p>
         </div>
 
@@ -111,13 +129,6 @@ export default function Predictions() {
             <span>Defect Simulator</span>
           </button>
 
-          <button
-            onClick={() => notify('✨ Model weights v4.3 successfully deployed to production inference pipeline!')}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#43562b] hover:bg-[#2d3f16] text-white text-xs font-bold transition shadow-[0_4px_14px_rgba(45,63,22,0.3)] hover:shadow-lg active:scale-95 cursor-pointer"
-          >
-            <span>Deploy Weights v4.3</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </section>
 
@@ -125,20 +136,20 @@ export default function Predictions() {
       <section className="flex items-center gap-3 overflow-x-auto pb-1 text-xs font-mono">
         <div className="flex items-center gap-2 px-3.5 py-2 bg-white rounded-2xl border border-[#d4dece] shadow-2xs whitespace-nowrap">
           <Activity className="w-3.5 h-3.5 text-[#43562b]" />
-          <span className="text-[#45483e]">Calibrated:</span>
-          <strong className="text-[#161e10]">2 hrs ago</strong>
+          <span className="text-[#45483e]">Trained:</span>
+          <strong className="text-[#161e10]">{trainedOn}</strong>
         </div>
 
         <div className="flex items-center gap-2 px-3.5 py-2 bg-white rounded-2xl border border-[#d4dece] shadow-2xs whitespace-nowrap">
           <BrainCircuit className="w-3.5 h-3.5 text-[#43562b]" />
-          <span className="text-[#45483e]">5-Fold Cross-Val:</span>
-          <strong className="text-[#161e10]">R² = 0.9849</strong>
+          <span className="text-[#45483e]">Cross-validated R²:</span>
+          <strong className="text-[#161e10]">{fmt(model?.cv_r2_mean)}</strong>
         </div>
 
         <div className="flex items-center gap-2 px-3.5 py-2 bg-white rounded-2xl border border-[#d4dece] shadow-2xs whitespace-nowrap">
           <Code2 className="w-3.5 h-3.5 text-[#43562b]" />
-          <span className="text-[#45483e]">Corpus:</span>
-          <strong className="text-[#161e10]">18,400 Commit ASTs</strong>
+          <span className="text-[#45483e]">Predicts:</span>
+          <strong className="text-[#161e10]">{model?.target ? pretty(model.target) : '—'}</strong>
         </div>
 
         <div className="flex items-center gap-2 px-3.5 py-2 bg-[#e8f1db] rounded-2xl border border-[#c5c8ba] shadow-2xs whitespace-nowrap ml-auto">
@@ -158,19 +169,16 @@ export default function Predictions() {
           <div className="flex items-start justify-between relative z-10">
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-[#d3ebb2] font-bold">
-                ML Defect Vulnerability
+                Average Defect Risk
               </span>
               <div className="text-3xl font-extrabold tracking-tight mt-1 text-white leading-none font-mono">
-                <AnimatedCounter value={38.5} decimals={1} />% <span className="text-base text-[#d3ebb2]/80 font-normal font-sans">Exposure</span>
+                <AnimatedCounter value={avgDefectPct} decimals={1} />% <span className="text-base text-[#d3ebb2]/80 font-normal font-sans">per file</span>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-white/20">
-              +4.2% Sprint 48
-            </span>
           </div>
           <div className="pt-3 flex items-center justify-between z-10 text-xs border-t border-white/10">
-            <span className="text-[#d3ebb2] font-mono">14 Modules Exposed</span>
-            <span className="font-mono font-bold text-white">Relative SZZ Risk</span>
+            <span className="text-[#d3ebb2] font-mono">{highRiskCount} of {probs.length} files ≥ 50%</span>
+            <span className="font-mono font-bold text-white">Relative risk</span>
           </div>
         </InteractiveCard>
 
@@ -182,7 +190,7 @@ export default function Predictions() {
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">Mean Absolute Error</span>
               <div className="text-3xl font-extrabold text-[#161e10] mt-1 font-mono">
-                <AnimatedCounter value={1.085} decimals={3} /> <span className="text-sm font-normal text-[#45483e] font-sans">LOC/Defect</span>
+                <AnimatedCounter value={model?.mae ?? 0} decimals={2} /> <span className="text-sm font-normal text-[#45483e] font-sans">faults</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#d3e4ac] text-[#2d3f16]">
@@ -190,8 +198,8 @@ export default function Predictions() {
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-[#45483e] font-mono pt-3 border-t border-[#e5ebe0]">
-            <span>Low Var σ²: 0.04</span>
-            <strong className="text-[#161e10]">RMSE: 1.242</strong>
+            <span>{fmt(model?.mae_improvement_pct, 0)}% better than baseline</span>
+            <strong className="text-[#161e10]">RMSE: {fmt(model?.rmse)}</strong>
           </div>
         </InteractiveCard>
 
@@ -201,9 +209,9 @@ export default function Predictions() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">Ensemble Architecture</span>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">Model Size</span>
               <div className="text-3xl font-extrabold text-[#161e10] mt-1 font-mono">
-                <AnimatedCounter value={300} /> <span className="text-sm font-normal text-[#45483e] font-sans">Trees</span>
+                <AnimatedCounter value={model?.n_estimators ?? 0} /> <span className="text-sm font-normal text-[#45483e] font-sans">trees</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#ffddb8] text-[#855300]">
@@ -211,8 +219,8 @@ export default function Predictions() {
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-[#45483e] font-mono pt-3 border-t border-[#e5ebe0]">
-            <span>Max Depth 12</span>
-            <span>MSE Criterion</span>
+            <span>{model?.features?.length ?? 0} input features</span>
+            <span>Test R² {fmt(model?.r2)}</span>
           </div>
         </InteractiveCard>
 
@@ -222,16 +230,16 @@ export default function Predictions() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">Primary SHAP Driver</span>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">Strongest Factor</span>
               <div className="text-3xl font-extrabold text-[#161e10] mt-1 font-mono">
-                <AnimatedCounter value={34} />% <span className="text-sm font-normal text-[#45483e] font-sans">Weight</span>
+                <AnimatedCounter value={(topFeature?.importance ?? 0) * 100} decimals={1} />% <span className="text-sm font-normal text-[#45483e] font-sans">importance</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#ffdad6] text-[#ba1a1a]">
               <Flame className="w-5 h-5" />
             </span>
           </div>
-          <span className="text-xs text-[#ba1a1a] font-semibold pt-3 border-t border-[#e5ebe0]">Cyclomatic Complexity</span>
+          <span className="text-xs text-[#ba1a1a] font-semibold pt-3 border-t border-[#e5ebe0]">{topFeature ? pretty(topFeature.feature) : '—'}</span>
         </InteractiveCard>
       </section>
 
@@ -241,14 +249,14 @@ export default function Predictions() {
         {/* Left Bento: Feature Importance SHAP (5 cols) */}
         <div className="lg:col-span-5 p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] flex flex-col justify-between space-y-4">
           <div>
-            <h2 className="text-lg font-bold text-[#161e10]">Feature Importance Rankings</h2>
-            <p className="text-xs text-[#45483e]">SHAP value decomposition for Random Forest Regressor</p>
+            <h2 className="text-lg font-bold text-[#161e10]">What drives the prediction</h2>
+            <p className="text-xs text-[#45483e]">Top features by importance in the trained model</p>
           </div>
 
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={featureImportanceData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-                <XAxis type="number" stroke="#75786d" fontSize={11} domain={[0, 40]} />
+                <XAxis type="number" stroke="#75786d" fontSize={11} domain={[0, 'dataMax']} />
                 <YAxis dataKey="feature" type="category" stroke="#45483e" fontSize={11} width={140} tickLine={false} />
                 <Tooltip content={<ChartTooltip unit="%" />} />
                 <Bar dataKey="weight" fill="#43562b" radius={[0, 8, 8, 0]} isAnimationActive={false}>
@@ -261,8 +269,12 @@ export default function Predictions() {
           </div>
 
           <div className="p-3 bg-[#f8faf6] rounded-2xl border border-[#e5ebe0] text-xs text-[#45483e]">
-            <span className="font-bold text-[#161e10]">Model Interpretation: </span>
-            <span>Complexity combined with High Churn increases defect likelihood exponentially (&gt;2.8&times;).</span>
+            <span className="font-bold text-[#161e10]">Reading this: </span>
+            <span>
+              {featureImportanceData.length >= 2
+                ? `${featureImportanceData[0].feature} and ${featureImportanceData[1].feature} account for ${(featureImportanceData[0].weight + featureImportanceData[1].weight).toFixed(0)}% of the model's decisions.`
+                : 'Model details unavailable.'}
+            </span>
           </div>
         </div>
 
@@ -270,11 +282,11 @@ export default function Predictions() {
         <div className="lg:col-span-7 p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] space-y-5">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="text-lg font-bold text-[#161e10]">Live Defect Risk Simulator</h2>
-              <p className="text-xs text-[#45483e]">Adjust AST telemetry parameters to calculate live forecasted relative defect risk (uncalibrated)</p>
+              <h2 className="text-lg font-bold text-[#161e10]">What-if Risk Explorer</h2>
+              <p className="text-xs text-[#45483e]">A simple illustrative formula to show how size, complexity and churn push risk up. It is not the trained model.</p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#e8f1db] text-[#2d3f16]">
-              Real-Time Inference
+            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#fdf2e7] text-[#855300]">
+              Illustrative
             </span>
           </div>
 
@@ -366,8 +378,8 @@ export default function Predictions() {
       <section className="p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-lg font-bold text-[#161e10]">Predicted High-Defect Risk Files ({atRiskFiles.length})</h2>
-            <p className="text-xs text-[#45483e]">Modules with rising risk trajectory flagged by our trained Random Forest Regressor</p>
+            <h2 className="text-lg font-bold text-[#161e10]">Highest predicted risk ({atRiskFiles.length})</h2>
+            <p className="text-xs text-[#45483e]">Files the model expects to be riskiest, compared with their current technical risk</p>
           </div>
           <button
             onClick={() => navigate('/priorities')}
@@ -408,17 +420,15 @@ export default function Predictions() {
                 <div className="bg-white p-2 rounded-xl border border-[#e5ebe0]">
                   <span className="text-[11px] font-mono text-[#45483e] block">Predicted</span>
                   <span className="font-mono font-bold text-sm text-[#ba1a1a] whitespace-nowrap">
-                    {file.predicted_risk} (+{file.risk_delta})
+                    {file.predicted_risk} ({file.risk_delta >= 0 ? '+' : ''}{file.risk_delta})
                   </span>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {file.risk_factors.map((factor, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded-full bg-[#edf1e8] text-[#2d3f16] font-mono text-[10px] font-semibold border border-[#d4dece]">
-                    {factor}
-                  </span>
-                ))}
+                <span className="px-2 py-0.5 rounded-full bg-[#edf1e8] text-[#2d3f16] font-mono text-[10px] font-semibold border border-[#d4dece]">
+                  Priority {file.level}
+                </span>
               </div>
 
               <div className="flex justify-end pt-1" onClick={(e) => e.stopPropagation()}>
@@ -443,7 +453,7 @@ export default function Predictions() {
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Current Risk</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Predicted Risk</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Confidence</th>
-                <th className="py-3 px-4 font-bold">Identified Risk Drivers</th>
+                <th className="py-3 px-4 font-bold">Priority</th>
                 <th className="py-3 px-4 font-bold text-right whitespace-nowrap">Action</th>
               </tr>
             </thead>
@@ -468,20 +478,16 @@ export default function Predictions() {
                   <td className="py-3.5 px-4 text-center font-mono font-bold text-[#ba1a1a] whitespace-nowrap">
                     {file.predicted_risk}
                     <span className="text-xs text-[#ba1a1a] ml-1 font-semibold">
-                      (+{file.risk_delta})
+                      ({file.risk_delta >= 0 ? '+' : ''}{file.risk_delta})
                     </span>
                   </td>
                   <td className="py-3.5 px-4 text-center font-mono font-semibold text-[#2d3f16] whitespace-nowrap">
                     {(file.confidence * 100).toFixed(0)}%
                   </td>
                   <td className="py-3.5 px-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {file.risk_factors.map((factor, i) => (
-                        <span key={i} className="px-2 py-0.5 rounded-full bg-[#edf1e8] text-[#2d3f16] font-mono text-xs font-semibold border border-[#d4dece] whitespace-nowrap">
-                          {factor}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-[#edf1e8] text-[#2d3f16] font-mono text-xs font-semibold border border-[#d4dece] whitespace-nowrap">
+                      {file.level}
+                    </span>
                   </td>
                   <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button

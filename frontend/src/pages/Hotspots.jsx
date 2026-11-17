@@ -63,16 +63,20 @@ export default function Hotspots() {
 
   if (loading) return <LoadingState message="Extracting Lexical AST metrics & God-classes..." />;
   if (error) return <ErrorState message={error} />;
-  if (!data || data.length === 0) return <EmptyState title="No hotspots detected" />;
+  if (!data || data.length === 0) {
+    return <EmptyState title="No hotspots yet" message="Files become hotspots when technical risk or business impact reaches 70+. Scan a repository to find them." />;
+  }
 
   const normalizeItem = (item, idx) => {
     const file = item.file_path || item.file_name || item.file || item.path || item.name || `module_${item.file_id || idx + 1}`;
-    const riskScore = (item.technical_risk ?? item.risk_score ?? item.total_risk ?? 68.0).toFixed(1);
-    const complexity = item.complexity ?? Math.max(12, Math.round((item.technical_risk || 50) * 0.45));
-    const churn = item.churn ?? Math.max(15, Math.round((item.technical_risk || 50) * 2.2));
-    const smells = item.defects || item.code_smells_count || (riskScore > 80 ? 4 : 2);
-    const businessImpact = (item.business_impact ?? item.impact_score ?? 7.5).toFixed(1);
-    const id = item.file_id || item.id || idx + 1;
+    // Show measured values only; '—' when the scan didn't record one
+    const fmt = (v, d = 0) => (v === null || v === undefined ? '—' : Number(v).toFixed(d));
+    const riskScore = fmt(item.technical_risk, 1);
+    const complexity = fmt(item.cyclomatic_complexity);
+    const churn = fmt(item.churn_commits);
+    const smells = fmt(item.code_smells_count);
+    const businessImpact = fmt(item.business_impact, 1);
+    const id = item.file_id;
 
     return { id, file, riskScore, complexity, churn, smells, businessImpact, raw: item };
   };
@@ -92,7 +96,7 @@ export default function Hotspots() {
     setSelectedItem({
       component: normItem.file,
       priority_score: normItem.riskScore,
-      remediation_effort_hours: normItem.complexity * 0.8,
+      remediation_effort_hours: normItem.raw.cyclomatic_complexity ? normItem.raw.cyclomatic_complexity * 0.8 : 8,
       defect_probability: (normItem.riskScore / 100) * 0.8,
       technical_risk: normItem.riskScore,
       business_impact: normItem.businessImpact,
@@ -100,6 +104,15 @@ export default function Hotspots() {
     });
     setJiraModalOpen(true);
   };
+
+  const raw = data;
+  const nums = (key) => raw.map((r) => r[key]).filter((v) => v !== null && v !== undefined);
+  const maxComplexityItem = raw.reduce((m, r) => ((r.cyclomatic_complexity ?? -1) > (m?.cyclomatic_complexity ?? -1) ? r : m), null);
+  const totalChurn = nums('churn_commits').reduce((a, b) => a + b, 0);
+  const churnEstimated = raw.some((r) => r.churn_provenance && r.churn_provenance !== 'MEASURED');
+  const dupVals = nums('duplication_pct');
+  const avgDup = dupVals.length ? dupVals.reduce((a, b) => a + b, 0) / dupVals.length : 0;
+  const criticalCount = raw.filter((r) => r.technical_risk >= 80).length;
 
   const severityTabs = [
     { id: 'ALL', label: 'All Hotspots', count: normalizedList.length },
@@ -117,37 +130,24 @@ export default function Hotspots() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#e8f1db] text-[#2d3f16] font-mono text-xs font-bold tracking-wide uppercase border border-[#c5c8ba]/60">
               <span className="w-2 h-2 rounded-full bg-[#43562b] animate-pulse"></span>
-              CONTINUOUS LEXICAL AST TELEMETRY
-            </span>
-            <span className="text-xs text-[#45483e] font-mono bg-[#edf1e8] px-2.5 py-0.5 rounded-full border border-[#d4dece]">
-              Engine v4.18.2-prod
+              Risk ≥ 70 or impact ≥ 70
             </span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold text-[#161e10] tracking-tight">
-            Monorepo Code Hotspots & Structural Decay
+            Code Hotspots
           </h1>
           <p className="text-sm text-[#45483e]">
-            Real-time abstract syntax tree analysis detecting god-classes, volatile cyclomatic churn nodes, and high-entropy defect clusters across core application domains.
+            Files where technical risk or business impact is 70 or higher, ranked by priority score.
           </p>
         </div>
 
         {/* Global Action Triggers */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => {
-              notify('🔄 Re-running live AST parse over latest branch commit (9f2a4c1)...');
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-[#161e10] hover:bg-[#f8faf6] text-xs font-bold shadow-xs border border-[#d4dece] transition cursor-pointer active:scale-95"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#43562b]" />
-            <span>Re-scan AST Delta</span>
-          </button>
-
-          <button
             onClick={() => navigate('/priorities')}
             className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#43562b] hover:bg-[#2d3f16] text-white text-xs font-bold shadow-[0_4px_16px_rgba(45,63,22,0.3)] transition active:scale-95 cursor-pointer"
           >
-            <span>Simulate Refactor Impact</span>
+            <span>See all priorities</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -164,10 +164,10 @@ export default function Hotspots() {
           <div className="flex items-start justify-between relative z-10">
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-[#d3ebb2] font-bold">
-                God-Classes Detected
+                Hotspots
               </span>
               <div className="text-3xl font-extrabold mt-1 leading-none font-mono">
-                <AnimatedCounter value={19} /> <span className="text-sm text-[#d3ebb2]/80 font-normal font-sans">Classes</span>
+                <AnimatedCounter value={raw.length} /> <span className="text-sm text-[#d3ebb2]/80 font-normal font-sans">files</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-white/15 text-white">
@@ -175,8 +175,8 @@ export default function Hotspots() {
             </span>
           </div>
           <div className="pt-3 flex items-center justify-between z-10 border-t border-white/10">
-            <span className="text-xs text-[#d3ebb2] font-mono">&gt;40 complexity nodes</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs bg-white/15 font-bold font-mono">4 Monorepos</span>
+            <span className="text-xs text-[#d3ebb2] font-mono">Technical risk ≥ 80</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs bg-white/15 font-bold font-mono">{criticalCount} critical</span>
           </div>
         </InteractiveCard>
 
@@ -187,10 +187,10 @@ export default function Hotspots() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">
-                Max Cyclomatic Peak
+                Highest Complexity
               </span>
               <div className="text-3xl font-extrabold text-[#161e10] tracking-tight mt-1 font-mono">
-                <AnimatedCounter value={48.2} decimals={1} /> <span className="text-sm font-normal text-[#45483e] font-sans">Score</span>
+                <AnimatedCounter value={maxComplexityItem?.cyclomatic_complexity ?? 0} decimals={1} /> <span className="text-sm font-normal text-[#45483e] font-sans">cyclomatic</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#ffdad6] text-[#ba1a1a]">
@@ -198,7 +198,7 @@ export default function Hotspots() {
             </span>
           </div>
           <span className="text-xs text-[#ba1a1a] font-semibold pt-3 border-t border-[#e5ebe0]">
-            Critical complexity in routing/billing
+            {maxComplexityItem ? maxComplexityItem.file_name : 'No complexity data'}
           </span>
         </InteractiveCard>
 
@@ -209,10 +209,10 @@ export default function Hotspots() {
           <div className="flex items-start justify-between">
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-[#45483e] font-bold">
-                Code Churn (30d)
+                Code Churn
               </span>
               <div className="text-3xl font-extrabold text-[#161e10] tracking-tight mt-1 font-mono">
-                <AnimatedCounter value={2840} /> <span className="text-sm font-normal text-[#45483e] font-sans">LOC</span>
+                <AnimatedCounter value={totalChurn} /> <span className="text-sm font-normal text-[#45483e] font-sans">commits</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#d3e4ac] text-[#2d3f16]">
@@ -220,7 +220,7 @@ export default function Hotspots() {
             </span>
           </div>
           <span className="text-xs text-[#556437] font-semibold pt-3 border-t border-[#e5ebe0]">
-            14 Active Commit Authors
+            {churnEstimated ? 'Estimated (no git history scanned)' : 'Measured from git history'}
           </span>
         </InteractiveCard>
 
@@ -234,7 +234,7 @@ export default function Hotspots() {
                 Code Duplication
               </span>
               <div className="text-3xl font-extrabold text-[#161e10] tracking-tight mt-1 font-mono">
-                <AnimatedCounter value={18.4} decimals={1} />% <span className="text-sm font-normal text-[#45483e] font-sans">Clone Nodes</span>
+                <AnimatedCounter value={avgDup} decimals={1} />% <span className="text-sm font-normal text-[#45483e] font-sans">average</span>
               </div>
             </div>
             <span className="p-2.5 rounded-2xl bg-[#fdf2e7] text-[#855300]">
@@ -242,7 +242,7 @@ export default function Hotspots() {
             </span>
           </div>
           <span className="text-xs text-[#855300] font-semibold pt-3 border-t border-[#e5ebe0]">
-            AST clone detection enabled
+            Across {dupVals.length} hotspot files
           </span>
         </InteractiveCard>
       </section>
@@ -322,14 +322,14 @@ export default function Hotspots() {
                   <div className="bg-white p-2 rounded-xl border border-[#e5ebe0]">
                     <span className="text-[11px] font-mono text-[#45483e] block">Churn</span>
                     <span className="font-mono font-bold text-sm text-[#45483e] whitespace-nowrap">
-                      {item.churn} LOC
+                      {item.churn} commits
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
                   <span className="text-xs text-[#45483e]">
-                    Impact: <strong className="text-[#161e10]">{item.businessImpact}/10</strong>
+                    Impact: <strong className="text-[#161e10]">{item.businessImpact}/100</strong>
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -370,7 +370,7 @@ export default function Hotspots() {
               <tr className="border-b border-[#e5ebe0] text-[#45483e] uppercase font-mono text-xs">
                 <th className="py-3 px-4 font-bold">File Path</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Complexity</th>
-                <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Churn (LOC)</th>
+                <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Churn (commits)</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Smells / Bugs</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Technical Risk</th>
                 <th className="py-3 px-4 font-bold text-center whitespace-nowrap">Business Impact</th>
@@ -408,7 +408,7 @@ export default function Hotspots() {
                       {item.riskScore} / 100
                     </td>
                     <td className="py-3.5 px-4 text-center font-mono font-semibold text-[#161e10] whitespace-nowrap">
-                      {item.businessImpact} / 10
+                      {item.businessImpact} / 100
                     </td>
                     <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">

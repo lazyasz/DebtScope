@@ -123,8 +123,8 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
         <div className="p-6 space-y-4">
           {result ? (
             <div className="space-y-4 text-center py-4">
-              <div className="w-12 h-12 bg-[#d3ebb2] text-[#2d3f16] rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="h-6 w-6" />
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto ${result.status === 'error' ? 'bg-[#ffdad6] text-[#ba1a1a]' : 'bg-[#d3ebb2] text-[#2d3f16]'}`}>
+                {result.status === 'error' ? <AlertCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
               </div>
               <div>
                 <h4 className="text-base font-bold text-[#161e10]">

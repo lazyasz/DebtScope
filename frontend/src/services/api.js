@@ -171,12 +171,12 @@ export async function updateIntegrationsConfig(config) {
 }
 
 export async function createJiraIssue(payload) {
-  const { data } = await apiClient.post('/api/integrations/jira/create-issue', payload);
+  const { data } = await apiClient.post('/api/integrations/jira/create-issue', payload, { timeout: 120000 }); // one Jira call per ticket
   return data;
 }
 
 export async function bulkExportJira(payload) {
-  const { data } = await apiClient.post('/api/integrations/jira/bulk-export', payload);
+  const { data } = await apiClient.post('/api/integrations/jira/bulk-export', payload, { timeout: 120000 }); // one Jira call per ticket
   return data;
 }
 

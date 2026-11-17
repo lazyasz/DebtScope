@@ -255,7 +255,7 @@ class GitHubProvider(IntegrationProvider):
                 }
             )
             if resp.status_code != 200:
-                return {"repositories": SANDBOX_GITHUB_REPOSITORIES, "total_count": len(SANDBOX_GITHUB_REPOSITORIES), "warning": "Rate limit fallback to sandbox"}
+                return {"repositories": [], "total_count": 0, "error": f"GitHub returned {resp.status_code}; try reconnecting."}
 
             items = resp.json()
             normalized = [Normalizer.from_github_repo(item).model_dump() for item in items]

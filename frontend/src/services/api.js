@@ -429,131 +429,35 @@ export async function getExecutiveReportSummary() {
 // ---------------------------------------------------------
 
 export async function getIntegrationsStatus() {
-  try {
-    const { data } = await apiClient.get('/api/v1/integrations/status');
-    return data;
-  } catch (err) {
-    try {
-      const { data } = await apiClient.get('/api/integrations/status');
-      return data;
-    } catch (e) {
-      if (!isDemoWorkspace()) throw err;
-      console.warn('[API] /integrations/status failed, fallback:', err.message);
-      return {
-        status: 'healthy',
-        google_auth: { configured: false, mode: 'sandbox_mock', connected: true },
-        github: { connected: false, status: 'DISCONNECTED', provider: 'github', configured: false, mode: 'sandbox_mock', connected_repos_count: 0 },
-        jira: { connected: false, status: 'DISCONNECTED', provider: 'jira', configured: false, mode: 'sandbox_mock', connected_projects_count: 0, project_key: 'DEBT' },
-        notion: { connected: false, status: 'DISCONNECTED', provider: 'notion', configured: false, mode: 'sandbox_mock', connected_databases_count: 0, database_id: 'notion_db_pei_backlog_2026' }
-      };
-    }
-  }
+  const { data } = await apiClient.get('/api/v1/integrations/status');
+  return data;
 }
 
 export async function getProviderAuthUrl(provider, redirectUri = null) {
-  try {
-    const { data } = await apiClient.get(`/api/v1/integrations/${provider}/auth-url`, {
-      params: redirectUri ? { redirect_uri: redirectUri } : {}
-    });
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    return {
-      provider,
-      auth_url: `${window.location.origin}/integrations?provider=${provider}&auth_success=true&mock_code=${provider}_mock_code_2026`,
-      state: 'sandbox_state'
-    };
-  }
+  const { data } = await apiClient.get(`/api/v1/integrations/${provider}/auth-url`, {
+    params: redirectUri ? { redirect_uri: redirectUri } : {},
+  });
+  return data;
 }
 
 export async function exchangeProviderCode(provider, code, state = null, redirectUri = null) {
-  try {
-    const { data } = await apiClient.post(`/api/v1/integrations/${provider}/callback`, {
-      code,
-      state,
-      redirect_uri: redirectUri
-    });
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn(`[API] ${provider} callback failed:`, err.message);
-    return {
-      status: 'success',
-      message: `Connected to ${provider} in sandbox mode`,
-      connection: { connected: true, status: 'CONNECTED', provider }
-    };
-  }
+  const { data } = await apiClient.post(`/api/v1/integrations/${provider}/callback`, { code, state, redirect_uri: redirectUri }, { timeout: 30000 });
+  return data;
 }
 
 export async function getProviderResources(provider, query = '') {
-  try {
-    const { data } = await apiClient.get(`/api/v1/integrations/${provider}/resources`, {
-      params: query ? { q: query } : {}
-    });
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn(`[API] ${provider} resources failed:`, err.message);
-    if (provider === 'github') {
-      return {
-        repositories: [
-          { id: 'gh_repo_101', name: 'debtscope-core-mesh', full_name: 'debtscope/debtscope-core-mesh', description: 'Predictive Engineering Intelligence Platform & ML Triage Mesh', language: 'Python', stars_count: 342, open_issues_count: 8, critical_hotspots: 4, health_score: 82.4, is_private: true },
-          { id: 'gh_repo_102', name: 'payment-billing-gateway', full_name: 'enterprise-org/payment-billing-gateway', description: 'PCI-DSS Compliant Distributed Payment Routing Microservice', language: 'Go', stars_count: 89, open_issues_count: 14, critical_hotspots: 7, health_score: 64.8, is_private: true },
-          { id: 'gh_repo_103', name: 'apache-zookeeper-distributed', full_name: 'apache/zookeeper', description: 'Apache ZooKeeper Distributed Coordination Lakehouse Cluster', language: 'Java', stars_count: 11400, open_issues_count: 126, critical_hotspots: 18, health_score: 58.2, is_private: false },
-          { id: 'gh_repo_104', name: 'realtime-event-streamer', full_name: 'enterprise-org/realtime-event-streamer', description: 'Kafka & Flink Real-Time Event Pipeline for Telemetry Processing', language: 'TypeScript', stars_count: 156, open_issues_count: 3, critical_hotspots: 2, health_score: 91.0, is_private: true },
-          { id: 'gh_repo_105', name: 'auth-identity-mesh', full_name: 'enterprise-org/auth-identity-mesh', description: 'OAuth 2.0 / OIDC Zero-Trust Identity Gateway with Mutual TLS', language: 'Python', stars_count: 210, open_issues_count: 6, critical_hotspots: 5, health_score: 73.5, is_private: true }
-        ],
-        total_count: 5
-      };
-    }
-    if (provider === 'jira') {
-      return {
-        projects: [
-          { id: 'proj_101', key: 'DEBT', name: 'Technical Debt & Architectural Remediation', issueTypes: ['Task', 'Bug', 'Debt Remediation'], open_issues_count: 18 },
-          { id: 'proj_102', key: 'CORE', name: 'Core Platform & ML Intelligence Engine', issueTypes: ['Task', 'Bug', 'Epic'], open_issues_count: 24 },
-          { id: 'proj_103', key: 'PAY', name: 'Distributed Payment & Billing Gateway', issueTypes: ['Task', 'Bug', 'Security Vulnerability'], open_issues_count: 11 }
-        ],
-        total_count: 3
-      };
-    }
-    return {
-      databases: [
-        { id: 'notion_db_pei_backlog_2026', title: 'Engineering Technical Debt Roadmap 2026', workspace: 'DebtScope Engineering Workspace', icon: '⚡', items_count: 28 },
-        { id: 'notion_db_adr_architecture', title: 'Architecture Decision Records & Hotspots (ADR)', workspace: 'DebtScope Engineering Workspace', icon: '🏛️', items_count: 14 },
-        { id: 'notion_db_executive_audit', title: 'Executive Boardroom Health & ROI Audits', workspace: 'DebtScope Engineering Workspace', icon: '📑', items_count: 6 }
-      ],
-      total_count: 3
-    };
-  }
+  const { data } = await apiClient.get(`/api/v1/integrations/${provider}/resources`, { params: query ? { q: query } : {}, timeout: 30000 });
+  return data;
 }
 
 export async function syncProviderResources(provider, resourceIds) {
-  try {
-    const { data } = await apiClient.post(`/api/v1/integrations/${provider}/sync`, {
-      resource_ids: resourceIds
-    });
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn(`[API] ${provider} sync failed:`, err.message);
-    return {
-      status: 'success',
-      provider,
-      synced_count: resourceIds.length,
-      timestamp: new Date().toISOString()
-    };
-  }
+  const { data } = await apiClient.post(`/api/v1/integrations/${provider}/sync`, { resource_ids: resourceIds }, { timeout: 180000 });
+  return data;
 }
 
 export async function disconnectProvider(provider) {
-  try {
-    const { data } = await apiClient.post(`/api/v1/integrations/${provider}/disconnect`);
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn(`[API] ${provider} disconnect failed:`, err.message);
-    return { status: 'success', message: `${provider} disconnected.` };
-  }
+  const { data } = await apiClient.post(`/api/v1/integrations/${provider}/disconnect`);
+  return data;
 }
 
 // ── Auth API helpers (P1) ─────────────────────────────────────────────────────

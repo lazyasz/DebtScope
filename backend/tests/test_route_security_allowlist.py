@@ -98,6 +98,11 @@ USER_SCOPE_ROUTES_JUSTIFICATIONS: Dict[str, str] = {
     "/auth/switch-profile": (
         "Demo persona switcher: Alters the active session user identity among predefined demo profiles."
     ),
+    # Per-user third-party account links (each person connects their own GitHub/Notion/Jira)
+    "/integrations/status": "Reports which external accounts the signed-in user has connected.",
+    "/integrations/{provider}/auth-url": "Starts the signed-in user's own OAuth sign-in with a provider.",
+    "/integrations/{provider}/resources": "Lists repos/projects/databases visible to the user's own connected account (read-only).",
+    "/integrations/{provider}/disconnect": "Removes the signed-in user's own provider connection.",
 }
 
 

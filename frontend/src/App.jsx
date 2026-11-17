@@ -19,6 +19,7 @@ const Copilot = lazy(() => import('./pages/Copilot'));
 const DataQuality = lazy(() => import('./pages/DataQuality'));
 const Simulator = lazy(() => import('./pages/Simulator'));
 const IntegrationsHub = lazy(() => import('./pages/IntegrationsHub'));
+const IntegrationCallback = lazy(() => import('./pages/IntegrationCallback'));
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 
@@ -61,6 +62,7 @@ export default function App() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/integrations" element={<IntegrationsHub />} />
+                <Route path="/integrations/callback/:provider" element={<IntegrationCallback />} />
                 <Route path="/simulator" element={<Simulator />} />
                 <Route path="/debt" element={<TechnicalDebt />} />
                 <Route path="/predictions" element={<Predictions />} />

@@ -13,8 +13,8 @@ import secrets
 from datetime import datetime
 
 from backend.database.connection import get_db
-from backend.database.models import IntegrationConnection, JiraIssueLink, NotionReport, Workspace
-from backend.database.tenant import get_current_workspace
+from backend.database.models import IntegrationConnection, JiraIssueLink, NotionReport, Workspace, User
+from backend.database.tenant import get_current_workspace, get_current_user as session_user
 from backend.integrations.github_provider import GitHubProvider
 from backend.integrations.jira_provider import JiraProvider
 from backend.integrations.notion_provider import NotionProvider
@@ -69,10 +69,10 @@ class ConfigUpdateRequest(BaseModel):
 
 
 @router.get("/status", summary="Get Unified Ecosystem Integration Status")
-async def get_ecosystem_status(db: Session = Depends(get_db)):
+async def get_ecosystem_status(db: Session = Depends(get_db), user: User = Depends(session_user)):
     """Returns the comprehensive operational status of all external providers."""
-    current_user = get_current_user()
-    user_id = current_user.get("id", "usr_lead_01")
+    current_user = {"id": user.id, "name": user.full_name, "email": user.email, "role": None, "avatar": user.avatar_url}
+    user_id = user.id
 
     # Fetch connections for this user
     connections = db.query(IntegrationConnection).filter(IntegrationConnection.user_id == user_id).all()
@@ -110,11 +110,17 @@ async def get_ecosystem_status(db: Session = Depends(get_db)):
 @router.get("/{provider}/auth-url", summary="Get Provider OAuth Authorization URL")
 def get_provider_auth_url(
     provider: str,
+    user: User = Depends(session_user),
     redirect_uri: Optional[str] = None,
     state: Optional[str] = None
 ):
     """Generates the vendor OAuth 2.0 authorization URL with CSRF protection."""
     prov = get_provider(provider)
+    if not getattr(prov, "client_id", None) or not getattr(prov, "client_secret", None):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{provider.capitalize()} sign-in isn't set up on this server yet (missing OAuth app).",
+        )
     csrf_state = state or secrets.token_urlsafe(16)
     auth_url = prov.get_authorization_url(csrf_state, redirect_uri)
     return {
@@ -128,15 +134,16 @@ def get_provider_auth_url(
 async def handle_provider_callback(
     provider: str,
     payload: CallbackRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(session_user),
+    workspace: Workspace = Depends(get_current_workspace),
 ):
     """
     Exchanges vendor authorization code for tokens, encrypts tokens,
     and creates or updates the user's IntegrationConnection record.
     """
     prov = get_provider(provider)
-    current_user = get_current_user()
-    user_id = current_user.get("id", "usr_lead_01")
+    user_id = user.id
 
     try:
         token_res = await prov.exchange_code(payload.code, payload.state, payload.redirect_uri)
@@ -158,6 +165,7 @@ async def handle_provider_callback(
 
     if not conn:
         conn = IntegrationConnection(
+            workspace_id=workspace.id,
             user_id=user_id,
             provider=provider,
             provider_account_id=str(user_data.get("id", user_data.get("login", "unknown"))),
@@ -421,32 +429,35 @@ def update_credentials_config(payload: ConfigUpdateRequest, workspace: Workspace
 async def get_provider_resources(
     provider: str,
     q: Optional[str] = Query(default=None, description="Search keyword query"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(session_user),
 ):
     """Fetches accessible repositories (GitHub), projects (Jira), or databases (Notion)."""
     prov = get_provider(provider)
-    current_user = get_current_user()
-    user_id = current_user.get("id", "usr_lead_01")
+    user_id = user.id
 
     conn = db.query(IntegrationConnection).filter(
         IntegrationConnection.user_id == user_id,
         IntegrationConnection.provider == provider
     ).first()
 
+    if not conn or conn.status != "CONNECTED":
+        return {"connected": False, "items": [], "message": f"Connect your {provider.capitalize()} account first."}
     resources = await prov.get_resources(conn, query=q)
-    return resources
+    return {"connected": True, **resources}
 
 
 @router.post("/{provider}/sync", summary="Synchronize Selected Provider Resources")
 async def sync_provider_resources(
     provider: str,
     payload: SyncRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(session_user),
+    workspace: Workspace = Depends(get_current_workspace),
 ):
     """Triggers deep AST scanning and technical-debt metric synchronization for selected resources."""
     prov = get_provider(provider)
-    current_user = get_current_user()
-    user_id = current_user.get("id", "usr_lead_01")
+    user_id = user.id
 
     conn = db.query(IntegrationConnection).filter(
         IntegrationConnection.user_id == user_id,
@@ -460,12 +471,12 @@ async def sync_provider_resources(
 @router.post("/{provider}/disconnect", summary="Disconnect Integration and Revoke Token")
 async def disconnect_provider(
     provider: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(session_user),
 ):
     """Safely disconnects provider integration."""
     prov = get_provider(provider)
-    current_user = get_current_user()
-    user_id = current_user.get("id", "usr_lead_01")
+    user_id = user.id
 
     conn = db.query(IntegrationConnection).filter(
         IntegrationConnection.user_id == user_id,

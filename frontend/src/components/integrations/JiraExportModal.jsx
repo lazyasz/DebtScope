@@ -1,18 +1,30 @@
-import React, { useState } from 'react';
-import { createJiraIssue, bulkExportJira } from '../../services/api';
+import React, { useEffect, useState } from 'react';
+import { createJiraIssue, bulkExportJira, getProviderResources } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Layers, CheckCircle2, ExternalLink, X, Sparkles, AlertCircle } from 'lucide-react';
 
 export default function JiraExportModal({ isOpen, onClose, item, component, isBulk = false, components = [] }) {
   const targetComponent = component || item;
   const targetComponents = components;
-  const { integrations, showNotification, notify } = useAuth();
+  const { showNotification, notify } = useAuth();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
-  const [projectKey, setProjectKey] = useState(integrations?.jira?.project_key || 'DEBT');
+  const [projectKey, setProjectKey] = useState('');
+  const [projects, setProjects] = useState(null); // null = loading, [] = none/not connected
   const [issueType, setIssueType] = useState('Task');
-  const [sprintName, setSprintName] = useState('Sprint 48 — High ROI Refactoring');
+  const sprintName = 'DebtScope priorities';
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getProviderResources('jira')
+      .then((r) => {
+        const list = r.connected ? r.projects || [] : [];
+        setProjects(list);
+        if (list.length) setProjectKey((k) => k || list[0].key);
+      })
+      .catch(() => setProjects([]));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -27,6 +39,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
       if (isBulk) {
         const payload = {
           sprint_name: sprintName,
+          project_key: projectKey || null,
           components: targetComponents.map((c) => ({
             component_name: c.component || c.file_path || c.name || c.file || 'Component',
             priority_score: c.priority_score || c.priority || 75.0,
@@ -42,7 +55,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
         setResult(res);
         notifyUser(res.mode === 'sandbox_mock'
           ? 'Simulated only: Jira is not connected, no tickets were created.'
-          : `Created ${res.total_tickets_created} Jira tickets for ${sprintName}.`);
+          : `Created ${res.total_tickets_created} Jira tickets in ${res.project_key}.`);
       } else {
         const payload = {
           component_name: targetComponent?.component || targetComponent?.name || targetComponent?.file || 'Component',
@@ -53,6 +66,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
           business_impact: targetComponent?.business_impact || 70.0,
           roi_quadrant: targetComponent?.roi_quadrant || 'Quick Wins',
           issue_type: issueType,
+          project_key: projectKey || null,
           summary: `[Tech Debt] Refactor high-risk component: ${targetComponent?.component || targetComponent?.name || targetComponent?.file || 'Component'}`,
         };
         const res = await createJiraIssue(payload);
@@ -90,9 +104,9 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
             </div>
             <div>
               <h3 className="text-base font-bold tracking-tight">
-                {isBulk ? 'Bulk Export Sprint to Jira' : 'Create Jira Refactoring Task'}
+                {isBulk ? 'Export priorities to Jira' : 'Create a Jira ticket'}
               </h3>
-              <p className="text-xs text-[#d3ebb2]">Automated 5D Debt Scoring & Story Point Estimation</p>
+              <p className="text-xs text-[#d3ebb2]">Creates tickets in your connected Jira</p>
             </div>
           </div>
           <button
@@ -120,6 +134,19 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                     : result.mode === 'sandbox_mock' ? 'Connect Jira in Integrations to create real tickets.'
                     : result.issue_key ? `Ticket: ${result.issue_key}` : `${result.total_tickets_created} tickets created`}
                 </p>
+                {result.mode === 'live' && (result.issues || []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {result.issues.slice(0, 10).map((iss) => (
+                      <a key={iss.issue_key} href={iss.issue_url} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#43562b] hover:underline">
+                        {iss.issue_key} <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {(result.errors || []).length > 0 && (
+                  <p className="text-[11px] text-[#855300] mt-2">{result.errors.length} item(s) failed: {result.errors[0]}</p>
+                )}
               </div>
               <div className="p-3 bg-[#f8faf6] rounded-2xl border border-[#d4dece] text-xs font-mono text-left space-y-1">
                 <div className="flex justify-between">
@@ -128,7 +155,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#75786d]">Project:</span>
-                  <span className="font-bold text-[#161e10]">{projectKey}</span>
+                  <span className="font-bold text-[#161e10]">{result.project_key || projectKey || '—'}</span>
                 </div>
               </div>
               <button
@@ -142,9 +169,9 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
             <>
               {isBulk ? (
                 <div className="p-4 bg-[#f8faf6] rounded-2xl border border-[#d4dece] space-y-2">
-                  <span className="text-[11px] font-mono uppercase font-bold text-[#75786d] block">Sprint Batch Scope</span>
+                  <span className="text-[11px] font-mono uppercase font-bold text-[#75786d] block">What will be exported</span>
                   <p className="text-xs text-[#161e10]">
-                    Exporting <strong>{targetComponents.length || 8} high-priority refactoring items</strong> to sprint backlog.
+                    <strong>{targetComponents.length} top-priority files</strong>, one ticket each.
                   </p>
                 </div>
               ) : (
@@ -168,13 +195,20 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-[#45483e] font-semibold mb-1">Jira Project Key</label>
-                  <input
-                    type="text"
-                    value={projectKey}
-                    onChange={(e) => setProjectKey(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl font-mono uppercase focus:ring-2 focus:ring-[#43562b]"
-                  />
+                  <label className="block text-[#45483e] font-semibold mb-1">Jira project</label>
+                  {projects === null ? (
+                    <p className="text-[#75786d]">Loading your Jira projects…</p>
+                  ) : projects.length === 0 ? (
+                    <p className="text-[#855300]">Jira isn't connected, so this will only be simulated. Connect Jira on the Integrations page to create real tickets.</p>
+                  ) : (
+                    <select
+                      value={projectKey}
+                      onChange={(e) => setProjectKey(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl focus:ring-2 focus:ring-[#43562b]"
+                    >
+                      {projects.map((p) => <option key={p.id} value={p.key}>{p.name}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[#45483e] font-semibold mb-1">Issue Type</label>
@@ -183,9 +217,9 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                     onChange={(e) => setIssueType(e.target.value)}
                     className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl focus:ring-2 focus:ring-[#43562b]"
                   >
-                    <option value="Task">Task (Tech Debt Refactoring)</option>
-                    <option value="Bug">Bug (High Relative Defect Risk)</option>
-                    <option value="Story">Story (Architectural Decoupling)</option>
+                    <option value="Task">Task</option>
+                    <option value="Bug">Bug</option>
+                    <option value="Story">Story</option>
                   </select>
                 </div>
               </div>
@@ -205,7 +239,7 @@ export default function JiraExportModal({ isOpen, onClose, item, component, isBu
                   className="px-5 py-2 bg-[#43562b] hover:bg-[#2d3f16] text-white font-bold rounded-xl shadow-md transition flex items-center gap-1.5 text-xs cursor-pointer disabled:opacity-50"
                 >
                   <Layers className="w-3.5 h-3.5" />
-                  <span>{loading ? 'Dispatching...' : isBulk ? 'Bulk Push to Jira' : 'Create Issue'}</span>
+                  <span>{loading ? 'Creating…' : isBulk ? `Create ${targetComponents.length} tickets` : 'Create ticket'}</span>
                 </button>
               </div>
             </>

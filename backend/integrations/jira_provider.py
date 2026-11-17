@@ -453,6 +453,76 @@ class JiraProvider(IntegrationProvider):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+    async def create_issues(self, connection: IntegrationConnection, db: Session, project_key: Optional[str], items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Creates real issues in the user's own Jira site with their OAuth token."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            token = TokenSecurity.decrypt(connection.access_token_enc)
+            sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
+            if sites.status_code == 401 and connection.refresh_token_enc:
+                # Atlassian access tokens last 1 hour; refresh tokens rotate, so store the new one
+                fresh = await self.refresh_token(TokenSecurity.decrypt(connection.refresh_token_enc))
+                if not fresh.get("access_token"):
+                    raise PermissionError("Your Jira sign-in expired. Disconnect and connect Jira again.")
+                token = fresh["access_token"]
+                connection.access_token_enc = TokenSecurity.encrypt(token)
+                connection.refresh_token_enc = TokenSecurity.encrypt(fresh["refresh_token"])
+                db.commit()
+                sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}"})
+            if sites.status_code != 200 or not sites.json():
+                raise PermissionError("Couldn't reach your Jira site. Disconnect and connect Jira again.")
+            site = sites.json()[0]
+            api = f"https://api.atlassian.com/ex/jira/{site['id']}/rest/api/3"
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+            if not project_key:
+                found = await client.get(f"{api}/project/search", headers=headers, params={"maxResults": 1})
+                values = found.json().get("values", []) if found.status_code == 200 else []
+                if not values:
+                    raise ValueError("Your Jira site has no projects yet. Create one in Jira first.")
+                project_key = values[0]["key"]
+
+            created, errors = [], []
+            for it in items[:50]:
+                component = it.get("component_name", "Component")
+                lines = [
+                    f"File: {component}",
+                    f"Priority score: {float(it.get('priority_score', 0)):.0f}/100",
+                    f"Estimated effort: {float(it.get('remediation_effort_hours', 0)):.0f} hours",
+                ]
+                if it.get("explanation"):
+                    lines.append(it["explanation"])
+                lines.append("Created by DebtScope.")
+                fields = {
+                    "project": {"key": project_key.upper()},
+                    "summary": (it.get("summary") or f"Reduce tech debt in {component}")[:250],
+                    "issuetype": {"name": it.get("issue_type") or "Task"},
+                    "labels": ["tech-debt", "debtscope"],
+                    "description": {"type": "doc", "version": 1, "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": line}]} for line in lines
+                    ]},
+                }
+                res = await client.post(f"{api}/issue", headers=headers, json={"fields": fields})
+                if res.status_code in (200, 201):
+                    key = res.json()["key"]
+                    created.append({"issue_key": key, "issue_url": f"{site['url']}/browse/{key}", "component": component})
+                else:
+                    body = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+                    msg = "; ".join(body.get("errorMessages", []) + [f"{k}: {v}" for k, v in body.get("errors", {}).items()]) or f"HTTP {res.status_code}"
+                    errors.append(f"{component}: {msg}")
+
+        if not created:
+            raise ValueError(errors[0] if errors else "Jira created no issues.")
+        return {
+            "status": "success",
+            "mode": "live",
+            "project_key": project_key.upper(),
+            "site": site.get("url"),
+            "total_tickets_created": len(created),
+            "issues": created,
+            "errors": errors,
+            **({"issue_key": created[0]["issue_key"], "issue_url": created[0]["issue_url"]} if len(items) == 1 else {}),
+        }
+
     async def disconnect(self, connection: Optional[IntegrationConnection], db: Session) -> bool:
         """Revokes token and disconnects Jira."""
         if not connection:

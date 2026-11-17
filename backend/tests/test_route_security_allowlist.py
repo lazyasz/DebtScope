@@ -103,6 +103,8 @@ USER_SCOPE_ROUTES_JUSTIFICATIONS: Dict[str, str] = {
     "/integrations/{provider}/auth-url": "Starts the signed-in user's own OAuth sign-in with a provider.",
     "/integrations/{provider}/resources": "Lists repos/projects/databases visible to the user's own connected account (read-only).",
     "/integrations/{provider}/disconnect": "Removes the signed-in user's own provider connection.",
+    "/integrations/jira/create-issue": "Creates a ticket in the signed-in user's own connected Jira.",
+    "/integrations/jira/bulk-export": "Creates tickets in the signed-in user's own connected Jira.",
 }
 
 

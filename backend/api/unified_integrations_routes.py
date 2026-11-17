@@ -216,11 +216,31 @@ class JiraIssueRequest(BaseModel):
     summary: Optional[str] = None
     issue_type: Optional[str] = "Task"
     explanation: Optional[str] = None
+    project_key: Optional[str] = None
 
 
 class JiraBulkExportRequest(BaseModel):
     sprint_name: Optional[str] = "Sprint 24 — Technical Debt Remediation"
+    project_key: Optional[str] = None
     components: List[JiraIssueRequest]
+
+
+def _user_jira(db: Session, user: User) -> Optional[IntegrationConnection]:
+    return db.query(IntegrationConnection).filter(
+        IntegrationConnection.user_id == user.id,
+        IntegrationConnection.provider == "jira",
+        IntegrationConnection.status == "CONNECTED",
+        IntegrationConnection.access_token_enc.isnot(None),
+    ).first()
+
+
+async def _create_in_user_jira(conn, db, project_key, items):
+    try:
+        return await PROVIDERS["jira"].create_issues(conn, db, project_key, items)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Jira refused the ticket: {e}")
 
 
 class NotionSyncRequest(BaseModel):
@@ -237,18 +257,32 @@ class NotionAuditReportRequest(BaseModel):
 
 
 @router.post("/jira/create-issue", summary="Create Single Jira Refactoring Issue")
-async def create_single_jira_issue(payload: JiraIssueRequest):
-    """Creates a single Jira Cloud issue for a specific technical debt component with ML defect metrics."""
+async def create_single_jira_issue(
+    payload: JiraIssueRequest,
+    user: User = Depends(session_user),
+    db: Session = Depends(get_db),
+):
+    """Creates the issue in the user's own Jira when connected; otherwise a clearly simulated result."""
+    conn = _user_jira(db, user)
+    if conn:
+        return await _create_in_user_jira(conn, db, payload.project_key, [payload.model_dump()])
     from backend.services.jira_service import create_jira_issue
     res = await create_jira_issue(payload.model_dump())
     return res
 
 
 @router.post("/jira/bulk-export", summary="Bulk Export Prioritized Components to Jira Sprint")
-async def bulk_export_sprint_to_jira(payload: JiraBulkExportRequest):
-    """Converts a batch of prioritized debt components into Jira sprint backlog tickets."""
-    from backend.services.jira_service import bulk_export_to_jira
+async def bulk_export_sprint_to_jira(
+    payload: JiraBulkExportRequest,
+    user: User = Depends(session_user),
+    db: Session = Depends(get_db),
+):
+    """Creates one issue per component in the user's own Jira when connected; otherwise simulated."""
     components_dict = [c.model_dump() for c in payload.components]
+    conn = _user_jira(db, user)
+    if conn:
+        return await _create_in_user_jira(conn, db, payload.project_key, components_dict)
+    from backend.services.jira_service import bulk_export_to_jira
     res = await bulk_export_to_jira(components_dict, payload.sprint_name)
     return res
 

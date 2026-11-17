@@ -199,7 +199,8 @@ export async function createNotionReport(payload) {
 // Simulator, AI Recipe, CI/CD Risk Gate & Executive Report APIs
 // -------------------------------------------------------------
 export async function runWhatIfSimulation(payload) {
-  const { data } = await apiClient.post('/api/simulator/what-if', payload);
+  // First call after a deploy loads the model, which takes longer than the 5 s default
+  const { data } = await apiClient.post('/api/simulator/what-if', payload, { timeout: 60000 });
   return data;
 }
 

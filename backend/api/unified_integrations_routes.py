@@ -379,8 +379,12 @@ async def ingest_notion_criticality(
 
 
 @router.post("/config", summary="Update Live Integration Credentials")
-def update_credentials_config(payload: ConfigUpdateRequest):
-    """Dynamically updates integration credentials at runtime."""
+def update_credentials_config(payload: ConfigUpdateRequest, workspace: Workspace = Depends(get_current_workspace)):
+    """Dynamically updates integration credentials at runtime (development only)."""
+    # These are server-wide keys shared by every user; in production they come
+    # only from the host's environment, never from a browser request.
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Integration keys are managed in the server environment.")
     if payload.github_client_id is not None:
         settings.GITHUB_CLIENT_ID = payload.github_client_id
     if payload.github_client_secret is not None:

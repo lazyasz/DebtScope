@@ -133,13 +133,6 @@ export default function IntegrationsHub() {
             <Plus className="w-4 h-4" />
             <span>Connect Repository</span>
           </button>
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-[#f4f6f0] text-[#161e10] text-xs font-bold transition border border-[#d4dece] shadow-xs active:scale-95 cursor-pointer"
-          >
-            <Sliders className="w-4 h-4 text-[#43562b]" />
-            <span>Configure Keys</span>
-          </button>
         </div>
       </section>
 

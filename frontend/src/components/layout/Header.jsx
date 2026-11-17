@@ -128,8 +128,8 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
           {/* Live Ecosystem Badges */}
           <div className="hidden xl:flex items-center gap-1.5 p-1">
             <LiveConnectionBadge type="google" onClick={() => setAuthModalOpen(true)} />
-            <LiveConnectionBadge type="jira" onClick={() => setSettingsOpen(true)} />
-            <LiveConnectionBadge type="notion" onClick={() => setSettingsOpen(true)} />
+            <LiveConnectionBadge type="jira" onClick={() => navigate('/integrations')} />
+            <LiveConnectionBadge type="notion" onClick={() => navigate('/integrations')} />
           </div>
 
           {/* User Profile / Sign In Section */}
@@ -186,12 +186,12 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
                     <button
                       onClick={() => {
                         setProfileDropdownOpen(false);
-                        setSettingsOpen(true);
+                        navigate('/integrations');
                       }}
                       className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-medium text-[#0f1015] hover:bg-[#f8f9fb] rounded-lg transition cursor-pointer"
                     >
                       <span className="flex items-center gap-2">
-                        <Settings className="w-3.5 h-3.5 text-[#7048e8]" /> Ecosystem Settings
+                        <Settings className="w-3.5 h-3.5 text-[#7048e8]" /> Integrations
                       </span>
                       <ArrowRight className="w-3 h-3 text-[#88909e]" />
                     </button>
@@ -223,9 +223,9 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
 
           {/* Quick Settings Gear */}
           <button
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => navigate('/integrations')}
             className="p-1.5 rounded-lg text-[#525866] hover:bg-[#f3f4f8] transition cursor-pointer"
-            title="Ecosystem Integrations & Settings"
+            title="Integrations"
           >
             <Settings className="w-4 h-4" />
           </button>

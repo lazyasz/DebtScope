@@ -5,7 +5,6 @@ import { Shield, GitBranch, Activity, Lock, Cpu, ArrowUpRight } from 'lucide-rea
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AuthModal from '../auth/AuthModal';
-import SettingsDrawer from '../integrations/SettingsDrawer';
 import ScanRepoModal from '../common/ScanRepoModal';
 import { isSampleMode, setSampleMode } from '../../services/api';
 
@@ -102,7 +101,6 @@ export default function AppLayout() {
       </div>
 
       <AuthModal />
-      <SettingsDrawer />
       <ScanRepoModal 
         isOpen={scanModalOpen} 
         onClose={() => setScanModalOpen(false)} 

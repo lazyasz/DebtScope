@@ -33,3 +33,11 @@ def test_file_detail_includes_measured_metrics(seeded_client):
     detail = seeded_client.get(f"/api/v1/files/{file_id}").json()
     assert detail["lines_of_code"] > 0
     assert detail["cyclomatic_complexity"] is not None
+
+
+def test_integration_config_is_blocked_in_production(seeded_client, monkeypatch):
+    from backend.config import settings
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    res = seeded_client.post("/api/v1/integrations/config", json={"google_client_id": "attacker"})
+    assert res.status_code in (401, 403)
+    assert settings.GOOGLE_CLIENT_ID != "attacker"

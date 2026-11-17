@@ -59,7 +59,7 @@ export default function LiveConnectionBadge({ type = 'jira', onClick }) {
     if (onClick) {
       onClick();
     } else {
-      setSettingsOpen(true);
+      window.location.assign('/integrations');
     }
   };
 
@@ -114,7 +114,7 @@ export default function LiveConnectionBadge({ type = 'jira', onClick }) {
           <button
             onClick={() => {
               setHovered(false);
-              setSettingsOpen(true);
+              window.location.assign('/integrations');
             }}
             className="w-full mt-1 py-1.5 bg-[#261c47] hover:bg-[#3b2c6d] text-white rounded-lg text-[10px] font-semibold transition flex items-center justify-center gap-1 border border-white/10 cursor-pointer"
           >

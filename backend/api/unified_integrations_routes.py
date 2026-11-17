@@ -288,12 +288,30 @@ async def bulk_export_sprint_to_jira(
 
 
 @router.post("/notion/sync", summary="Sync Components to Notion Database")
-async def sync_to_notion_database(payload: NotionSyncRequest):
-    """Synchronizes prioritized technical debt items into a live Notion database."""
-    from backend.services.notion_service import sync_backlog_to_notion
+async def sync_to_notion_database(
+    payload: NotionSyncRequest,
+    user: User = Depends(session_user),
+    db: Session = Depends(get_db),
+):
+    """Adds the files to a database in the user's own Notion when connected; otherwise a clearly simulated result."""
     components_dict = [c.model_dump() for c in payload.components]
-    res = await sync_backlog_to_notion(components_dict, payload.database_id)
-    return res
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.user_id == user.id,
+        IntegrationConnection.provider == "notion",
+        IntegrationConnection.status == "CONNECTED",
+        IntegrationConnection.access_token_enc.isnot(None),
+    ).first()
+    if conn:
+        if not payload.database_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick one of your Notion databases.")
+        try:
+            return await PROVIDERS["notion"].create_backlog_pages(conn, payload.database_id, components_dict)
+        except PermissionError as e:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    from backend.services.notion_service import sync_backlog_to_notion
+    return await sync_backlog_to_notion(components_dict, payload.database_id)
 
 
 @router.post("/notion/create-report", summary="Create Executive Audit Report in Notion")

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, GitBranch, Activity, Lock, Cpu, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import AuthModal from '../auth/AuthModal';
 import ScanRepoModal from '../common/ScanRepoModal';
 import { isSampleMode, setSampleMode } from '../../services/api';
 
@@ -86,7 +85,6 @@ export default function AppLayout() {
         </footer>
       </div>
 
-      <AuthModal />
       <ScanRepoModal 
         isOpen={scanModalOpen} 
         onClose={() => setScanModalOpen(false)} 

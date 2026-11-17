@@ -82,7 +82,7 @@ export default function DataQuality() {
             className="px-4 py-2.5 bg-[#43562b] hover:bg-[#32421e] text-white rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-md shadow-[#43562b]/20"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Auditing Lakehouse...' : 'Run Quality Audit'}
+            {refreshing ? 'Reloading...' : 'Reload results'}
           </button>
         </div>
       </div>

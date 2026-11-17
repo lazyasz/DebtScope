@@ -10,7 +10,6 @@ import LoadingState from './components/ui/LoadingState';
 const Login = lazy(() => import('./pages/Login'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const Dashboard = lazy(() => import('./pages/DashboardHome'));
-const TechnicalDebt = lazy(() => import('./pages/TechnicalDebt'));
 const Predictions = lazy(() => import('./pages/Predictions'));
 const Priorities = lazy(() => import('./pages/Priorities'));
 const Hotspots = lazy(() => import('./pages/Hotspots'));
@@ -64,7 +63,6 @@ export default function App() {
                 <Route path="/integrations" element={<IntegrationsHub />} />
                 <Route path="/integrations/callback/:provider" element={<IntegrationCallback />} />
                 <Route path="/simulator" element={<Simulator />} />
-                <Route path="/debt" element={<TechnicalDebt />} />
                 <Route path="/predictions" element={<Predictions />} />
                 <Route path="/priorities" element={<Priorities />} />
                 <Route path="/hotspots" element={<Hotspots />} />

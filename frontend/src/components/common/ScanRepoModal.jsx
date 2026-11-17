@@ -35,8 +35,8 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
     { name: 'Flask Framework', repo: 'pallets/flask', tag: 'Python' },
     { name: 'FastAPI Core', repo: 'tiangolo/fastapi', tag: 'Python' },
     { name: 'Requests HTTP', repo: 'psf/requests', tag: 'Python' },
-    { name: 'Apache Zookeeper', repo: 'apache/zookeeper', tag: 'Lakehouse' },
-    { name: 'Apache Commons-IO', repo: 'apache/commons-io', tag: 'Lakehouse' },
+    { name: 'Apache Zookeeper', repo: 'apache/zookeeper', tag: 'Java' },
+    { name: 'Apache Commons-IO', repo: 'apache/commons-io', tag: 'Java' },
     { name: 'Express.js', repo: 'expressjs/express', tag: 'Node.js' },
   ];
 

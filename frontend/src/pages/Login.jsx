@@ -1,79 +1,38 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+const ERRORS = {
+  google_denied: 'Google sign-in was cancelled.',
+  state_mismatch: 'Security check failed. Please try again.',
+  auth_failed: 'Authentication failed. Please try again.',
+  server_error: 'Server error during sign-in. Please try again.',
+};
 
 /**
- * Login page — Google OAuth sign-in entry point.
- * Redirects to /dashboard if already authenticated.
+ * Login page: Google sign-in. The GuestOnly route guard already sends signed-in
+ * users to the dashboard, so this page does no session check of its own.
  */
 export default function Login() {
-  const navigate = useNavigate();
-  const [checking, setChecking] = useState(true);
-  const [sandboxMode, setSandboxMode] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // Check for error in query string (from OAuth redirect)
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get('error');
-    if (err) {
-      const messages = {
-        google_denied: 'Google sign-in was cancelled.',
-        state_mismatch: 'Security check failed. Please try again.',
-        auth_failed: 'Authentication failed. Please try again.',
-        server_error: 'Server error during sign-in. Please try again.',
-      };
-      setError(messages[err] || 'Sign-in failed. Please try again.');
-    }
-
-    // Check if already logged in
-    fetch('/api/v1/auth/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.status === 'authenticated') {
-          navigate('/dashboard', { replace: true });
-        } else {
-          setSandboxMode(data?.sandbox_mode === true);
-          setChecking(false);
-        }
-      })
-      .catch(() => setChecking(false));
-  }, [navigate]);
+  const err = new URLSearchParams(window.location.search).get('error');
+  const error = err ? ERRORS[err] || 'Sign-in failed. Please try again.' : null;
 
   const handleGoogleLogin = () => {
     // Backend redirects to Google consent screen (server-side Authorization Code Flow)
     window.location.href = '/api/v1/auth/google/login';
   };
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="animate-pulse text-gray-400 text-sm">Checking session…</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950 px-4">
-      {/* Sandbox banner inside login page */}
-      {sandboxMode && (
-        <div className="fixed top-0 left-0 right-0 bg-amber-500 text-amber-950 text-xs font-semibold text-center py-1.5 z-50">
-          ⚠️ <strong>DEV SANDBOX AUTH ACTIVE</strong> — Clicking sign in will auto-login with the sandbox profile.
-        </div>
-      )}
-
       {/* Logo */}
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-white tracking-tight">
           Debt<span className="text-emerald-400">Scope</span>
         </h1>
-        <p className="mt-2 text-gray-400 text-sm">Predictive Engineering Intelligence</p>
+        <p className="mt-2 text-gray-400 text-sm max-w-sm">Find the files in your code most likely to cause bugs, and what to fix first.</p>
       </div>
 
       {/* Card */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 w-full max-w-sm shadow-2xl">
         <h2 className="text-lg font-semibold text-white mb-1">Sign in</h2>
         <p className="text-gray-400 text-sm mb-6">
-          Connect your Google account to get started.
+          Use any Google account. Your data stays in your own workspace.
         </p>
 
         {error && (
@@ -93,7 +52,7 @@ export default function Login() {
             <path fill="#FBBC05" d="M10.24 28.11A14.6 14.6 0 019.5 24c0-1.43.2-2.82.56-4.11l-7.1-5.52A23.95 23.95 0 001 24c0 3.87.93 7.53 2.57 10.77l6.67-6.66z"/>
             <path fill="#34A853" d="M24 47c5.54 0 10.19-1.84 13.59-4.98l-7.18-5.57c-1.84 1.23-4.19 1.95-6.41 1.95-6.46 0-11.97-4.07-13.76-9.69l-6.67 6.66C6.78 41.52 14.73 47 24 47z"/>
           </svg>
-          {sandboxMode ? 'Continue (Sandbox Auto-Login)' : 'Continue with Google'}
+          Continue with Google
         </button>
       </div>
 

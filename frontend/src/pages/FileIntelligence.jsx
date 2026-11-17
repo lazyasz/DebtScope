@@ -151,8 +151,11 @@ export default function FileIntelligence() {
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-1 pt-3 border-t border-[#e5ebe0] text-xs text-[#45483e] font-mono">
           <span>Base score: <strong className="text-[#161e10]">{fmt(b.baseline_priority_score)}</strong></span>
-          <span>Effort adjustment: <strong className="text-[#161e10]">{b.effort_deduction_or_boost >= 0 ? '+' : ''}{fmt(b.effort_deduction_or_boost)}</strong></span>
+          <span title="Final = 85% of the base score + 15% for how easy the file is to fix">
+            Effort adjustment: <strong className="text-[#161e10]">{data.priority_score - b.baseline_priority_score >= 0 ? '+' : ''}{fmt(data.priority_score - b.baseline_priority_score)}</strong>
+          </span>
           <span>Final priority: <strong className="text-[#161e10]">{fmt(data.priority_score)}</strong></span>
+          <span className="basis-full font-sans text-[#75786d]">Final = 85% base score + 15% for how easy the file is to fix.</span>
 
         </div>
       </section>
@@ -238,7 +241,7 @@ export default function FileIntelligence() {
             recipeState !== 'error' && <p className="text-xs text-[#75786d] py-6 text-center">Click "Get recipe" for step-by-step refactoring guidance.</p>
           )}
 
-          <button onClick={() => navigate('/copilot')} className="text-xs text-[#43562b] font-bold hover:underline">
+          <button onClick={() => navigate(`/copilot?q=${encodeURIComponent(`How should I fix ${data.file_path}? Give concrete steps.`)}`)} className="text-xs text-[#43562b] font-bold hover:underline">
             Ask the AI Copilot about this file →
           </button>
         </div>

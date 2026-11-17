@@ -178,6 +178,46 @@ class NotionProvider(IntegrationProvider):
         ]
         return {"databases": dbs, "total_count": len(dbs), "source": "live_notion_api"}
 
+    async def create_backlog_pages(self, connection: IntegrationConnection, database_id: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Adds one page per file to a database in the user's own Notion; fills only the title column so any database works."""
+        token = TokenSecurity.decrypt(connection.access_token_enc)
+        headers = {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"}
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            schema = await client.get(f"https://api.notion.com/v1/databases/{database_id}", headers=headers)
+            if schema.status_code == 401:
+                raise PermissionError("Your Notion sign-in is no longer valid. Disconnect and connect Notion again.")
+            if schema.status_code != 200:
+                raise ValueError("DebtScope can't open that database. Share it with the DebtScope connection in Notion.")
+            title_prop = next((name for name, p in schema.json().get("properties", {}).items() if p.get("type") == "title"), None)
+            if not title_prop:
+                raise ValueError("That database has no title column.")
+
+            created, errors = [], []
+            for it in items[:50]:
+                component = it.get("component_name", "File")
+                lines = [
+                    f"Priority score: {float(it.get('priority_score', 0)):.0f}/100",
+                    f"Technical risk: {float(it.get('technical_risk', 0)):.0f}/100 · Business impact: {float(it.get('business_impact', 0)):.0f}/100",
+                    f"Quadrant: {it.get('roi_quadrant', '—')}",
+                    "Added by DebtScope.",
+                ]
+                body = {
+                    "parent": {"database_id": database_id},
+                    "properties": {title_prop: {"title": [{"text": {"content": f"Fix tech debt: {component}"[:200]}}]}},
+                    "children": [
+                        {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": line}}]}}
+                        for line in lines
+                    ],
+                }
+                res = await client.post("https://api.notion.com/v1/pages", headers=headers, json=body)
+                if res.status_code == 200:
+                    created.append({"component": component, "url": res.json().get("url")})
+                else:
+                    errors.append(f"{component}: {res.json().get('message', res.status_code)}")
+        if not created:
+            raise ValueError(errors[0] if errors else "Notion created no pages.")
+        return {"status": "success", "mode": "live", "synced_count": len(created), "pages": created, "errors": errors}
+
     async def sync(self, connection: Optional[IntegrationConnection], resource_ids: List[str], db: Session) -> Dict[str, Any]:
         """Synchronizes prioritized technical debt items into Notion databases."""
         sample_components = [

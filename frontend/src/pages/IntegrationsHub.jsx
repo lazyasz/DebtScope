@@ -22,7 +22,7 @@ const PROVIDERS = {
   notion: {
     title: 'Notion',
     icon: Database,
-    purpose: 'Connect your Notion workspace so service importance (which services matter most) shapes the priorities.',
+    purpose: 'Connect your Notion to send top-priority files as pages into one of your databases.',
     noun: 'databases',
   },
   jira: {
@@ -214,7 +214,7 @@ function ServerNotionImport() {
   };
   return (
     <div className="p-3 rounded-2xl bg-[#f8faf6] border border-[#e5ebe0] space-y-2">
-      <p className="text-xs text-[#45483e]">The app also has a shared service table set up by its administrator.</p>
+      <p className="text-xs text-[#45483e]">Optional: import which services matter most from the team's shared Notion table, so business impact uses real values instead of defaults.</p>
       <button onClick={run} disabled={busy} className={secondary}>{busy ? 'Importing…' : 'Import shared service tiers'}</button>
       {result && (
         <p className="text-xs text-[#45483e]">

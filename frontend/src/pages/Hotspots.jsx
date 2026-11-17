@@ -7,7 +7,6 @@ import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import ScanRepoModal from '../components/common/ScanRepoModal';
 import JiraExportModal from '../components/integrations/JiraExportModal';
-import RemediationRecipeModal from '../components/remediation/RemediationRecipeModal';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
 import InteractiveCard from '../components/ui/InteractiveCard';
 import SpringTabs from '../components/ui/SpringTabs';
@@ -35,7 +34,6 @@ export default function Hotspots() {
   const [selectedComplexityFilter, setSelectedComplexityFilter] = useState('all');
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [jiraModalOpen, setJiraModalOpen] = useState(false);
-  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const { notify } = useAuth();
   const navigate = useNavigate();
@@ -251,15 +249,15 @@ export default function Hotspots() {
       <section className="p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#e5ebe0]">
           <div>
-            <h2 className="text-lg font-bold text-[#161e10]">Code Hotspots Explorer ({filteredData.length})</h2>
-            <p className="text-xs text-[#45483e]">Click any module card or row to launch deep telemetry breakdown and AI refactoring diffs</p>
+            <h2 className="text-lg font-bold text-[#161e10]">Hotspot files ({filteredData.length})</h2>
+            <p className="text-xs text-[#45483e]">Click a file for its full breakdown, or ask the AI how to fix it.</p>
           </div>
           <button
             onClick={() => setScanModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#edf1e8] hover:bg-[#dde5d7] text-[#2d3f16] text-xs font-bold rounded-xl transition border border-[#c5c8ba] cursor-pointer self-start sm:self-auto"
           >
             <Sparkles className="w-3.5 h-3.5 text-[#43562b]" />
-            <span>Scan Another Repo</span>
+            <span>Scan another repository</span>
           </button>
         </div>
 
@@ -333,14 +331,11 @@ export default function Hotspots() {
                   </span>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => {
-                        setSelectedItem(item.raw);
-                        setRecipeModalOpen(true);
-                      }}
+                      onClick={() => navigate(`/copilot?q=${encodeURIComponent(`How should I fix ${item.file}? Give concrete steps.`)}`)}
                       className="px-2.5 py-1.5 bg-[#edf1e8] hover:bg-[#dde5d7] text-[#2d3f16] rounded-xl text-xs font-bold transition flex items-center gap-1 border border-[#c5c8ba]"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Recipe</span>
+                      <span>Ask AI</span>
                     </button>
                     <button
                       onClick={() => handleOpenJira(item)}
@@ -413,14 +408,11 @@ export default function Hotspots() {
                     <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => {
-                            setSelectedItem(item.raw);
-                            setRecipeModalOpen(true);
-                          }}
+                          onClick={() => navigate(`/copilot?q=${encodeURIComponent(`How should I fix ${item.file}? Give concrete steps.`)}`)}
                           className="px-2.5 py-1.5 bg-[#edf1e8] hover:bg-[#dde5d7] text-[#2d3f16] rounded-xl text-xs font-bold transition flex items-center gap-1 border border-[#c5c8ba] cursor-pointer"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-[#43562b]" />
-                          <span>Recipe</span>
+                          <span>Ask AI</span>
                         </button>
                         <button
                           onClick={() => handleOpenJira(item)}
@@ -458,11 +450,6 @@ export default function Hotspots() {
         item={selectedItem}
       />
 
-      <RemediationRecipeModal
-        isOpen={recipeModalOpen}
-        onClose={() => setRecipeModalOpen(false)}
-        targetFile={selectedItem}
-      />
     </div>
   );
 }

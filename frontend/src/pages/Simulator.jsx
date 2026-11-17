@@ -70,7 +70,7 @@ export default function Simulator() {
 
       {files.length === 0 && (
         <p className="p-4 rounded-2xl bg-[#f8faf6] border border-[#e5ebe0] text-sm text-[#45483e]">
-          No scanned files yet. <Link to="/integrations" className="font-semibold text-[#43562b] hover:underline">Scan a repository</Link> to use your real files, or try the numbers below by hand.
+          No scanned files yet. <Link to="/dashboard" className="font-semibold text-[#43562b] hover:underline">Scan a repository</Link> to use your real files, or try the numbers below by hand.
         </p>
       )}
 

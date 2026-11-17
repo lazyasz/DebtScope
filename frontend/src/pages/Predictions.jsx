@@ -44,28 +44,11 @@ export default function Predictions() {
     getPriorities('source').then((r) => setRanked(r || [])).catch(() => setRanked([]));
   }, []);
 
-  // Interactive Live Defect Simulator State
-  const [simLoc, setSimLoc] = useState(850);
-  const [simComplexity, setSimComplexity] = useState(28);
-  const [simChurn, setSimChurn] = useState(420);
-  const [simAuthors, setSimAuthors] = useState(5);
-
-  if (loading) return <LoadingState message="Loading ML defect regression model and SHAP drivers..." />;
+  if (loading) return <LoadingState message="Loading predictions..." />;
   if (error) return <ErrorState message={error} />;
   if (!data || data.length === 0) {
     return <EmptyState title="No predictions yet" message="Scan a repository and the defect model will score each of its files." />;
   }
-
-  // Real-time simulated defect probability calculation
-  const calcDefectProb = () => {
-    const raw = (simLoc / 3000) * 0.35 + (simComplexity / 40) * 0.35 + (simChurn / 800) * 0.20 + (simAuthors / 8) * 0.10;
-    return Math.min(Math.max(raw * 100, 5), 98).toFixed(1);
-  };
-
-  const calcRiskScore = () => {
-    const prob = parseFloat(calcDefectProb());
-    return Math.min(Math.round(prob * 0.9 + (simComplexity * 0.8)), 100);
-  };
 
   const pretty = (f) => f.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const GREENS = ['#384a24', '#4d6332', '#687e45', '#889d62', '#a3b57f', '#bccb9c'];
@@ -119,14 +102,11 @@ export default function Predictions() {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => {
-              const element = document.getElementById('defect-simulator');
-              if (element) element.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onClick={() => navigate('/simulator')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#edf1e8] hover:bg-[#dde5d7] text-[#2d3f16] text-xs font-bold transition border border-[#c5c8ba] shadow-xs cursor-pointer active:scale-95"
           >
             <Sliders className="w-4 h-4 text-[#43562b]" />
-            <span>Defect Simulator</span>
+            <span>Try the What-If Simulator</span>
           </button>
 
         </div>
@@ -278,99 +258,17 @@ export default function Predictions() {
           </div>
         </div>
 
-        {/* Right Bento: Interactive Real-Time Defect Simulator (7 cols) */}
-        <div className="lg:col-span-7 p-6 bg-white rounded-3xl border border-[#d4dece] shadow-[0_4px_20px_-4px_rgba(45,63,22,0.06)] space-y-5">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-[#161e10]">What-if Risk Explorer</h2>
-              <p className="text-xs text-[#45483e]">A simple illustrative formula to show how size, complexity and churn push risk up. It is not the trained model.</p>
-            </div>
-            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#fdf2e7] text-[#855300]">
-              Illustrative
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#45483e] font-medium">Lines of Code (LOC):</span>
-                <span className="font-mono font-bold text-[#161e10]">{simLoc}</span>
-              </div>
-              <input 
-                type="range" 
-                min="100" 
-                max="3000" 
-                value={simLoc} 
-                onChange={(e) => setSimLoc(Number(e.target.value))}
-                className="w-full accent-[#43562b] cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#45483e] font-medium">Cyclomatic Complexity:</span>
-                <span className="font-mono font-bold text-[#161e10]">{simComplexity}</span>
-              </div>
-              <input 
-                type="range" 
-                min="1" 
-                max="50" 
-                value={simComplexity} 
-                onChange={(e) => setSimComplexity(Number(e.target.value))}
-                className="w-full accent-[#43562b] cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#45483e] font-medium">Recent Commit Churn (LOC):</span>
-                <span className="font-mono font-bold text-[#161e10]">{simChurn}</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1000" 
-                value={simChurn} 
-                onChange={(e) => setSimChurn(Number(e.target.value))}
-                className="w-full accent-[#43562b] cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#45483e] font-medium">Distinct Author Count:</span>
-                <span className="font-mono font-bold text-[#161e10]">{simAuthors}</span>
-              </div>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                value={simAuthors} 
-                onChange={(e) => setSimAuthors(Number(e.target.value))}
-                className="w-full accent-[#43562b] cursor-pointer"
-              />
-            </div>
-          </div>
-
-          {/* Simulator Live Outputs */}
-          <div className="p-4 bg-[#eef7e0] border border-[#d3ebb2] rounded-2xl flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#43562b] text-white flex items-center justify-center font-bold">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs text-[#556437] font-mono font-bold uppercase block">Predicted Defect Likelihood</span>
-                <span className="text-2xl font-extrabold text-[#2d3f16]">{calcDefectProb()}%</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div>
-                <span className="text-xs text-[#45483e] font-mono font-bold uppercase block text-right">Future Risk Score</span>
-                <span className="text-2xl font-extrabold text-[#ba1a1a] text-right block">{calcRiskScore()} / 100</span>
-              </div>
-            </div>
-          </div>
+        <div className="lg:col-span-7 p-6 bg-white rounded-3xl border border-[#d4dece] space-y-3 flex flex-col justify-center">
+          <h2 className="text-lg font-bold text-[#161e10]">What if you clean up a file?</h2>
+          <p className="text-sm text-[#45483e]">
+            The What-If Simulator runs this same trained model on one of your files and shows how its predicted defects change as you clean it up or add tests.
+          </p>
+          <button
+            onClick={() => navigate('/simulator')}
+            className="self-start px-4 py-2 rounded-xl bg-[#43562b] hover:bg-[#2d3f16] text-white text-xs font-bold transition cursor-pointer"
+          >
+            Open the What-If Simulator
+          </button>
         </div>
       </section>
 
@@ -385,7 +283,7 @@ export default function Predictions() {
             onClick={() => navigate('/priorities')}
             className="flex items-center gap-1.5 text-xs font-bold text-[#43562b] hover:text-[#2d3f16] transition cursor-pointer"
           >
-            <span>View Remediation Backlog</span>
+            <span>See all priorities</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

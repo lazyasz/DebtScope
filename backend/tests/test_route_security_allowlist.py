@@ -102,6 +102,7 @@ USER_SCOPE_ROUTES_JUSTIFICATIONS: Dict[str, str] = {
     "/integrations/{provider}/disconnect": "Removes the signed-in user's own provider connection.",
     "/integrations/jira/create-issue": "Creates a ticket in the signed-in user's own connected Jira.",
     "/integrations/jira/bulk-export": "Creates tickets in the signed-in user's own connected Jira.",
+    "/integrations/notion/sync": "Adds pages to a database in the signed-in user's own connected Notion.",
 }
 
 

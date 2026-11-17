@@ -7,6 +7,7 @@ Supports live Atlassian REST API v3 and interactive Sandbox/Mock mode.
 
 import json
 import httpx
+from urllib.parse import quote
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
@@ -127,9 +128,13 @@ class JiraProvider(IntegrationProvider):
 
         base_url = "https://auth.atlassian.com/authorize"
         audience = "api.atlassian.com"
-        scopes = "read:jira-work read:jira-user write:jira-work manage:jira-configuration offline_access"
+        # Must match the scopes enabled on the Atlassian app (developer console → Permissions)
+        scopes = "read:jira-work read:jira-user write:jira-work offline_access"
         r_uri = redirect_uri or self.redirect_uri
-        return f"{base_url}?audience={audience}&client_id={self.client_id}&scope={scopes}&redirect_uri={r_uri}&state={state}&response_type=code&prompt=consent"
+        return (
+            f"{base_url}?audience={audience}&client_id={self.client_id}&scope={quote(scopes)}"
+            f"&redirect_uri={quote(r_uri, safe='')}&state={state}&response_type=code&prompt=consent"
+        )
 
     async def exchange_code(self, code: str, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges authorization code for Atlassian Cloud access tokens."""
@@ -164,6 +169,8 @@ class JiraProvider(IntegrationProvider):
             )
             token_data = resp.json()
             access_token = token_data.get("access_token")
+            if not access_token:
+                raise ValueError(token_data.get("error_description") or token_data.get("error") or "Atlassian did not return a token")
 
             # Fetch accessible Cloud Sites
             sites_resp = await client.get(
@@ -379,12 +386,26 @@ class JiraProvider(IntegrationProvider):
         }
 
     async def get_resources(self, connection: Optional[IntegrationConnection], query: Optional[str] = None) -> Dict[str, Any]:
-        """Fetches accessible Jira projects."""
-        projects = SANDBOX_JIRA_PROJECTS
-        if query:
-            q = query.lower()
-            projects = [p for p in projects if q in p["name"].lower() or q in p["key"].lower()]
-        return {"projects": projects, "total_count": len(projects), "source": "jira_catalog"}
+        """Lists Jira projects on the sites the user's own Atlassian connection can access."""
+        token = TokenSecurity.decrypt(connection.access_token_enc) if connection else None
+        if not token:
+            return {"projects": [], "total_count": 0, "error": "Not connected"}
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        projects = []
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            sites = await client.get("https://api.atlassian.com/oauth/token/accessible-resources", headers=headers)
+            if sites.status_code != 200:
+                return {"projects": [], "total_count": 0, "error": f"Atlassian returned {sites.status_code}; try reconnecting."}
+            for site in sites.json():
+                resp = await client.get(
+                    f"https://api.atlassian.com/ex/jira/{site['id']}/rest/api/3/project/search",
+                    headers=headers,
+                    params={"maxResults": 100, **({"query": query} if query else {})},
+                )
+                if resp.status_code == 200:
+                    for p in resp.json().get("values", []):
+                        projects.append({"id": p["id"], "key": p["key"], "name": f"{p['key']} — {p['name']}", "site": site.get("url")})
+        return {"projects": projects, "total_count": len(projects), "source": "live_jira_api"}
 
     async def sync(self, connection: Optional[IntegrationConnection], resource_ids: List[str], db: Session) -> Dict[str, Any]:
         """Synchronizes prioritized debt items into Jira sprint backlog."""

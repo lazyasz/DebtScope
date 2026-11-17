@@ -78,8 +78,8 @@ Sidebar, grouped by journey:
 | Analyze | **Hotspots** | "Which files are both risky and important?" | ✅ Real data |
 | Analyze | **Risk Predictions** | "Which files will likely break?" + honest model facts | ✅ Real data |
 | Analyze | File details | One file: why it ranks here, metrics, debt items, fix recipe | ✅ Real data |
-| Act | **AI Copilot** | Ask questions about the code | ⚠️ Needs Gemini check |
-| Act | What-If Simulator | "What happens if we fix these?" | ⚠️ Not yet audited |
+| Act | **AI Copilot** | Ask questions about the code | ✅ Live (answers from workspace data; falls back to gemini-flash-lite-latest when busy) |
+| Act | What-If Simulator | "What if we clean up this file?" — real file metrics into the trained model | ✅ Done (fake TCO/PDF/treemap/PR-gate screens removed) |
 | Workspace | **Integrations** | Real status of GitHub / Notion / Jira, one real action each, setup steps when not connected | ✅ Done |
 | Workspace | Data Quality | Pipeline/data audit (labelled stored snapshot) | ✅ Fixed |
 | Public | Privacy, Terms | Required by Google | ✅ Done |
@@ -127,7 +127,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 | Google OAuth | Sign-in | ✅ Live, published (any Google account) | Render env + local `.env` |
 | GitHub token | Repo scanning (5,000 req/h) | ✅ Live | Render env + `.env` |
 | Notion API key + DB ID | Read service tiers ✅; write backlog ❌ | Partial | Render env + `.env` |
-| Gemini API key | AI Copilot | ⚠️ Key valid; Gemini returned "high demand" during tests | Render env + `.env` |
+| Gemini API key | AI Copilot | ✅ Live (new key "DebtScope Copilot", Nov 17) | Render env + `.env` |
 | GitHub OAuth app | Each user connects their own GitHub, lists their repos | ✅ Live (tested) | Render env `GITHUB_CLIENT_ID/SECRET` |
 | Notion OAuth app | Each user connects their own Notion, lists their databases | ✅ Live (tested) | Render env `NOTION_CLIENT_ID/SECRET` |
 | Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ✅ Live (tested on dhruvsakhare2006.atlassian.net, project KAN) | Render env `JIRA_CLIENT_ID/SECRET` |
@@ -138,15 +138,15 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 ## 9. Remaining work (priority order)
 
 **Must (before demo)**
-1. Rotate keys that were pasted in chat (GitHub token, Notion key, Gemini, Google secret, GitHub/Notion/Jira OAuth secrets) → update Render env + `.env`.
+1. Keys pasted in chat were left as-is by the owner's decision (rotate them if the project is ever made public).
 2. (Done) Integrations and Data Quality pages; in-app keys drawer removed (it overwrote server keys).
-3. Verify AI Copilot answers live on Render (or show a clear "AI unavailable, try again" state).
-4. (Done) Sidebar/scan-dialog jargon and fake "System Health 94.2%" removed. Executive PDF report on Simulator still uses invented dollar figures.
+3. (Done) AI Copilot answers live; busy/invalid-key cases show a plain message.
+4. (Done) Sidebar/scan-dialog jargon and fake "System Health 94.2%" removed; Executive PDF with invented dollar figures removed.
 
 **Should**
 5. (Done) Jira connects per user. Scans still use the server's GitHub token (public repos only); Notion/Jira *sync* still uses sample data.
 6. Notion backlog DB (needs guide approval): separate `NOTION_BACKLOG_DATABASE_ID` for sync; real report publishing.
-7. Audit Simulator and Data Quality pages.
+7. (Done) Simulator rebuilt on real data. Scans use the user's own GitHub connection (private repos), not yet tested on a private repo.
 8. Store scan history so the Dashboard risk trend can show real data.
 
 **Could**
@@ -166,8 +166,8 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 - [x] In production, data APIs require sign-in (no anonymous demo access).
 - [x] File details shows only real data, with a plain "why it ranks here" breakdown.
 - [x] Integrations and Data Quality pass the audit; the in-app keys drawer is removed.
-- [ ] What-If Simulator passes the same audit.
-- [ ] AI Copilot answers on the live site.
+- [x] What-If Simulator passes the same audit.
+- [x] AI Copilot answers on the live site.
 - [ ] All pasted keys rotated.
 
 ## 11. Non-functional

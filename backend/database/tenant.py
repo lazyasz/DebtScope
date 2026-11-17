@@ -81,7 +81,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             db.refresh(new_user)
             return new_user
 
-    # Default fallback: Lead Architect demo user
+    # Production: no session means no access (the demo fallback let anonymous
+    # visitors read and write the demo workspace as the demo user)
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in required")
+
+    # Default fallback (development/tests): Lead Architect demo user
     from backend.services.auth_service import DEMO_PROFILES
     demo_data = DEMO_PROFILES.get("dhruv", {})
     demo_user = db.query(User).filter(User.id == demo_data.get("id", "usr_lead_01")).first()

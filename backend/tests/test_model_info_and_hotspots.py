@@ -18,3 +18,11 @@ def test_hotspots_include_measured_metrics(seeded_client):
     assert hotspots, "seeded demo data should produce hotspots"
     for key in ("lines_of_code", "cyclomatic_complexity", "duplication_pct", "churn_commits"):
         assert key in hotspots[0]
+
+
+def test_production_requires_sign_in_for_data(client, monkeypatch):
+    from backend.config import settings
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "DEV_SANDBOX_AUTH", False)
+    assert client.get("/api/v1/repositories").status_code == 401
+    assert client.get("/health").status_code == 200

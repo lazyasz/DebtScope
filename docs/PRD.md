@@ -57,7 +57,7 @@ What makes it different from code-quality tools (e.g. SonarQube): it combines **
 3. Click a file → **File details**: why it ranks there, metrics, recommended fix.
 
 ### Flow D — Act on it
-- **Export to Jira** (one file or bulk) — creates tickets when Jira is connected; otherwise clearly says *Simulated*.
+- **Export to Jira** (one file or bulk) — creates real tickets in the user's own connected Jira project (picked from their projects; verified live: KAN-4); without a connection it clearly says *Simulated*.
 - **Sync to Notion** — writes the backlog to Notion (needs the backlog database, §9).
 - **AI Copilot** — ask "why is X ranked #1?" or "how do I fix X?" (Gemini).
 
@@ -188,5 +188,5 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 5. **Priorities**: explain the 5-factor formula and quadrants; click a Quick Win.
 6. **Hotspots**: highest-complexity file; churn honestly labelled *estimated*.
 7. **Risk Predictions**: the real model facts (R² 0.41, top feature author experience) — say plainly the scores are relative.
-8. **Export to Jira** → shows *Simulated — Jira not connected* (honest by design).
+8. **Export to Jira** → pick the KAN project → **Create ticket** → opens the real ticket in Jira.
 9. Close with: what's unique (code risk × business impact) and what's next (§9).

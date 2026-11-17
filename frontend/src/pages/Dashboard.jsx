@@ -75,77 +75,34 @@ export default function Dashboard() {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 relative z-10">
           
           <div className="space-y-2.5 max-w-3xl">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#f0ecfc] text-[#5b42a5] font-mono text-[11px] font-bold tracking-wide uppercase border border-[#d8cdfa]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#7048e8] animate-pulse"></span>
-                DebtScope Telemetry Engine
-              </span>
-              <span className="text-[11px] text-[#525866] font-mono bg-[#f3f4f8] px-2 py-0.5 rounded border border-[#e2e4ea]">
-                v4.18.2 · Active Mesh
-              </span>
-            </div>
-            
             <h1 className="text-xl sm:text-3xl font-bold text-[#0f1015] tracking-tight">
-              Predictive Engineering Intelligence Overview
+              Your code health
             </h1>
-            
+
             <p className="text-xs sm:text-sm text-[#525866] leading-relaxed">
-              Real-time algorithmic triage linking software telemetry, AST cyclomatic depth, Random Forest defect models (Relative Defect Risk), and business ROI prioritization.
+              DebtScope measures every file, predicts which ones are likely to cause bugs, and ranks what to fix first.
             </p>
 
-            {/* Action Button Hierarchy: 1 Primary + 3 Secondary */}
+            {/* One primary action, one secondary */}
             <div className="flex items-center gap-2 flex-wrap pt-1.5">
               <button
                 onClick={() => setScanModalOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#130e24] hover:bg-[#20173d] text-white text-xs font-semibold transition cursor-pointer shadow-2xs"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Scan Repository AST</span>
+                <span>Scan a repository</span>
               </button>
 
               <button
-                onClick={() => navigate('/simulator')}
+                onClick={() => navigate('/priorities')}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-[#f8f9fb] text-[#0f1015] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer"
               >
-                <Sliders className="w-3.5 h-3.5 text-[#7048e8]" />
-                <span>What-If Simulator</span>
-              </button>
-
-              <button
-                onClick={() => setReportModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-[#f8f9fb] text-[#0f1015] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#7048e8]" />
-                <span>Executive PDF</span>
-              </button>
-
-              <button
-                onClick={() => navigate('/integrations')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f8f9fb] hover:bg-[#f0ecfc] text-[#5b42a5] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer disabled:opacity-50"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Jira Backlog</span>
-              </button>
-
-              <button
-                onClick={() => navigate('/integrations')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f8f9fb] hover:bg-[#f3f4f8] text-[#525866] text-xs font-semibold transition border border-[#e2e4ea] cursor-pointer disabled:opacity-50"
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span>Notion Roadmap</span>
+                <Layers className="w-3.5 h-3.5 text-[#7048e8]" />
+                <span>See what to fix first</span>
               </button>
             </div>
           </div>
 
-          {/* Right Hero: Live Telemetry Radar Stream */}
-          <div className="shrink-0 flex items-center justify-center p-3.5 bg-[#0b0714] rounded-xl border border-[#261c47] shadow-sm">
-            <TelemetryRadar 
-              size={120} 
-              active={true} 
-              healthScore={health} 
-              label="Active AST Ingestion" 
-            />
-          </div>
 
         </div>
       </section>

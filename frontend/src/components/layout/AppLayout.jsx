@@ -63,31 +63,17 @@ export default function AppLayout() {
                 <div className="w-4 h-4 rounded bg-[#130e24] flex items-center justify-center text-white text-[9px] font-mono">
                   D
                 </div>
-                <span>DebtScope Platform</span>
+                <span>DebtScope</span>
               </div>
               <span className="text-[#88909e]">·</span>
-              <span className="font-mono text-[11px] text-[#525866]">
-                ISO/IEC 25010 & SZZ Defect Engine (Relative Defect Risk)
-              </span>
-              <span className="text-[#88909e] hidden sm:inline">·</span>
-              <div className="flex items-center gap-1.5 text-[11px] text-[#059669]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#059669] animate-pulse"></span>
-                <span>Telemetry Operational</span>
-              </div>
+              <span className="text-[11px] text-[#525866]">Academic project — PBL 2026</span>
             </div>
 
             <div className="flex items-center gap-5 text-[11px] text-[#525866]">
-              <span className="hover:text-[#0f1015] transition cursor-pointer">
-                Privacy Policy
-              </span>
-              <span className="hover:text-[#0f1015] transition cursor-pointer">
-                Terms of Service
-              </span>
-              <span className="hover:text-[#0f1015] transition cursor-pointer">
-                Security Architecture
-              </span>
+              <Link to="/privacy" className="hover:text-[#0f1015] transition">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-[#0f1015] transition">Terms of Service</Link>
               <a 
-                href="http://127.0.0.1:8000/docs" 
+                href="/docs" 
                 target="_blank" 
                 rel="noreferrer" 
                 className="flex items-center gap-1 hover:text-[#7048e8] font-semibold transition"

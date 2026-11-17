@@ -77,11 +77,11 @@ Sidebar, grouped by journey:
 | Analyze | **Priorities** | "What should I fix first?" ranked list + quadrant chart | ✅ Real data |
 | Analyze | **Hotspots** | "Which files are both risky and important?" | ✅ Real data |
 | Analyze | **Risk Predictions** | "Which files will likely break?" + honest model facts | ✅ Real data |
-| Analyze | File details | One file: scores, metrics, fix recipe | ⚠️ Not yet audited |
+| Analyze | File details | One file: why it ranks here, metrics, debt items, fix recipe | ✅ Real data |
 | Act | **AI Copilot** | Ask questions about the code | ⚠️ Needs Gemini check |
 | Act | What-If Simulator | "What happens if we fix these?" | ⚠️ Not yet audited |
 | Workspace | **Integrations** | Connect GitHub / Jira / Notion | ⚠️ ~10 fake actions remain |
-| Workspace | Data Quality | Pipeline/data audit | ⚠️ Not yet audited |
+| Workspace | Data Quality | Pipeline/data audit | ❌ Broken: calls `/lakehouse/*` without `/api` (gets HTML) |
 | Public | Privacy, Terms | Required by Google | ✅ Done |
 
 ### UI principles (apply to every page)
@@ -137,7 +137,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 
 **Must (before demo)**
 1. Rotate keys that were pasted in chat (GitHub, Notion, Gemini, Google secret) → update Render env + `.env`.
-2. Audit **File details** page (4 fake values) and **Integrations** page (~10 fake actions) with the UI principles in §6.
+2. Audit the **Integrations** page (~10 fake actions) with the UI principles in §6; fix **Data Quality** API paths (`/api/lakehouse/*`).
 3. Verify AI Copilot answers live on Render (or show a clear "AI unavailable, try again" state).
 4. Remove leftover jargon labels on Dashboard hero ("DebtScope Telemetry Engine", "v4.18.2 · Active Mesh").
 
@@ -162,7 +162,8 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 - [x] Jira/Notion actions never claim success when not connected.
 - [x] Dialogs open on screen; notifications don't crash the page.
 - [x] In production, data APIs require sign-in (no anonymous demo access).
-- [ ] File details, Integrations, Simulator, Data Quality pass the same audit.
+- [x] File details shows only real data, with a plain "why it ranks here" breakdown.
+- [ ] Integrations, Simulator, Data Quality pass the same audit.
 - [ ] AI Copilot answers on the live site.
 - [ ] All pasted keys rotated.
 
@@ -170,7 +171,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 
 - **Security:** data APIs return 401 without a session in production; CORS limited to the app origin; secrets only in env; production refuses to start with default secrets; OAuth state check; session in httpOnly cookie.
 - **Privacy:** only Google name/email/picture; see `/privacy`.
-- **Tests:** 187 backend tests (`.venv/bin/python -m pytest -q`).
+- **Tests:** 188 backend tests (`.venv/bin/python -m pytest -q`).
 - **Deploy:** push to the branch → Render auto-deploys (Docker; UI + API on one origin).
 
 ---

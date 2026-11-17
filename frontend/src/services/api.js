@@ -347,55 +347,8 @@ export async function getFinancialTcoAnalysis(payload = {}) {
 
 
 export async function getAiRemediationRecipe(payload) {
-  try {
-    const { data } = await apiClient.post('/api/recommendations/ai-recipe', payload);
-    return data;
-  } catch (err) {
-    if (!isDemoWorkspace()) throw err;
-    console.warn('[API] /api/recommendations/ai-recipe failed, fallback to local recipe generator:', err.message);
-    return {
-      status: 'success',
-      file_path: payload.file_path || 'src/core/DataTree.java',
-      code_smell_category: 'God Class & High Fan-Out Coupling',
-      severity: 'CRITICAL',
-      effort_estimate: {
-        sprint_points: 5,
-        estimated_hours: Math.round((payload.debt_minutes || 120) / 60 * 1.5),
-        target_roi_usd: Math.round(((payload.debt_minutes || 120) / 60) * 85 * 3.2)
-      },
-      step_by_step_plan: [
-        {
-          step: 1,
-          title: 'Extract Interface & Segregate Responsibilities',
-          description: 'Break monolithic class into domain-focused sub-handlers using Interface Segregation Principle.'
-        },
-        {
-          step: 2,
-          title: 'Introduce Dependency Injection Container',
-          description: 'Decouple tightly bound static singletons into injectable service dependencies.'
-        },
-        {
-          step: 3,
-          title: 'Isolate Pure Helper Transforms',
-          description: 'Extract recursive graph traversal methods into stateless pure functions with unit tests.'
-        },
-        {
-          step: 4,
-          title: 'Attach Telemetry & Unit Test Harness',
-          description: 'Achieve >85% branch test coverage before merging refactored module.'
-        }
-      ],
-      code_diff_preview: {
-        language: 'java',
-        before: `// Legacy Monolithic Anti-pattern (Cyclomatic Complexity: ${payload.complexity || 18})\npublic class DataTreeProcessor {\n    public void executeAll(Context ctx) {\n        // 450+ lines of intertwined I/O, validation & database mutation\n        if (ctx.isValid()) {\n            for (Node n : ctx.getNodes()) {\n                if (n.type == 1 && n.isReady()) {\n                    saveToDb(n);\n                    sendKafkaMessage(n);\n                    auditLog(n);\n                }\n            }\n        }\n    }\n}`,
-        after: `// Modern Domain-Segregated Architecture\n@Service\npublic class DataTreeProcessor {\n    private final NodeValidator validator;\n    private final NodeRepository repository;\n    private final EventPublisher publisher;\n\n    public void execute(ProcessRequest req) {\n        req.getNodes().stream()\n           .filter(validator::isProcessable)\n           .forEach(this::dispatch);\n    }\n\n    private void dispatch(Node n) {\n        repository.persist(n);\n        publisher.emitNodeProcessed(n);\n    }\n}`
-      },
-      target_metrics_after_remediation: {
-        complexity_reduction_pct: 62.5,
-        predicted_defect_risk_drop: '84.2% -> 18.5%'
-      }
-    };
-  }
+  const { data } = await apiClient.post('/api/recommendations/ai-recipe', payload);
+  return data;
 }
 
 export async function evaluateCiCdPr(payload) {

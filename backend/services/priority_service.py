@@ -378,6 +378,7 @@ class PriorityService:
         if is_experimental:
             conf = min(0.70, conf)
 
+        m = file_obj.metrics
         return FileDetailResponse(
             file=file_obj.file_name,
             file_id=file_obj.id,
@@ -408,4 +409,12 @@ class PriorityService:
             missing_dimensions=detail_missing_list,
             breakdown=breakdown,
             technical_debt_items=debt_list,
+            lines_of_code=file_obj.lines_of_code,
+            cyclomatic_complexity=m.cyclomatic_complexity if m else None,
+            code_smells_count=m.code_smells_count if m else None,
+            duplication_pct=m.duplication_pct if m else None,
+            test_coverage_pct=m.test_coverage_pct if m else None,
+            coverage_provenance=m.coverage_provenance if m else None,
+            churn_commits=m.code_churn_commits if m else None,
+            churn_provenance=m.churn_provenance if m else None,
         )

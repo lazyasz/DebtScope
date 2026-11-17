@@ -26,7 +26,7 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
       const payload = {
         database_id: databaseId,
         components: (targetComponents.length > 0 ? targetComponents : [{ file: 'services/auth/token_provider.py', priority_score: 85 }]).map((c) => ({
-          component_name: c.component || c.name || c.file || 'Component',
+          component_name: c.component || c.file_path || c.name || c.file || 'Component',
           priority_score: c.priority_score || c.priority || 75.0,
           remediation_effort_hours: c.remediation_effort_hours || c.remediation_effort || 8.0,
           defect_probability: c.defect_probability || 0.45,

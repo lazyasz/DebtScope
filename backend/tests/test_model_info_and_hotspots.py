@@ -26,3 +26,10 @@ def test_production_requires_sign_in_for_data(client, monkeypatch):
     monkeypatch.setattr(settings, "DEV_SANDBOX_AUTH", False)
     assert client.get("/api/v1/repositories").status_code == 401
     assert client.get("/health").status_code == 200
+
+
+def test_file_detail_includes_measured_metrics(seeded_client):
+    file_id = seeded_client.get("/api/v1/priorities").json()[0]["file_id"]
+    detail = seeded_client.get(f"/api/v1/files/{file_id}").json()
+    assert detail["lines_of_code"] > 0
+    assert detail["cyclomatic_complexity"] is not None

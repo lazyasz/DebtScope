@@ -14,7 +14,7 @@ the source of truth for users, flows, pages, APIs, status and remaining work.
 - Live: https://debtscope.onrender.com (Render, Docker, Postgres; auto-deploys on push)
 - Repo: lazyasz/DebtScope, branch workstream/ws1-evidence-closeout. My GitHub (Adesh0512)
   has write access and is logged in via `gh`. Commit and push when a step is done.
-- Backend: FastAPI in backend/ (tests: `.venv/bin/python -m pytest -q`, 187 passing).
+- Backend: FastAPI in backend/ (tests: `.venv/bin/python -m pytest -q`, 188 passing).
   Frontend: React/Vite in frontend/ (`npm run build` → served by the backend).
 - Local run: `.venv/bin/python -m uvicorn backend.main:app --port 8000`, then
   http://localhost:8000. Rebuild the frontend after UI changes.
@@ -34,9 +34,8 @@ the source of truth for users, flows, pages, APIs, status and remaining work.
    to click and paste myself. Writing a key I give you into the local .env is fine.
 
 ## Tasks, in order
-1. File details page (frontend/src/pages/FileIntelligence.jsx): remove fake values, wire to
-   GET /files/{id} and POST /recommendations/ai-recipe; plain explanation of why the file
-   ranks where it does.
+1. (DONE) File details page. Also fix Data Quality: frontend calls /lakehouse/* — must be
+   /api/lakehouse/* (frontend/src/pages/DataQuality.jsx).
 2. Integrations page (frontend/src/pages/IntegrationsHub.jsx): ~10 fake actions. Show real
    connection status from GET /integrations/status; buttons either work or clearly say
    "Not connected — here's how to connect".

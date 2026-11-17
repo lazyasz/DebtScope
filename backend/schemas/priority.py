@@ -117,6 +117,15 @@ class FileDetailResponse(BaseModel):
     missing_dimensions: List[str] = []
     breakdown: ScoreBreakdown
     technical_debt_items: List[Dict[str, Any]] = []
+    # Measured file metrics (None when the scan didn't record them)
+    lines_of_code: Optional[int] = None
+    cyclomatic_complexity: Optional[float] = None
+    code_smells_count: Optional[int] = None
+    duplication_pct: Optional[float] = None
+    test_coverage_pct: Optional[float] = None
+    coverage_provenance: Optional[str] = None
+    churn_commits: Optional[int] = None
+    churn_provenance: Optional[str] = None
 
 
 class AnalyzeRequest(BaseModel):

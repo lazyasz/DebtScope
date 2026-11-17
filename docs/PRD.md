@@ -130,7 +130,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 | Gemini API key | AI Copilot | ⚠️ Key valid; Gemini returned "high demand" during tests | Render env + `.env` |
 | GitHub OAuth app | Each user connects their own GitHub, lists their repos | ✅ Live (tested) | Render env `GITHUB_CLIENT_ID/SECRET` |
 | Notion OAuth app | Each user connects their own Notion, lists their databases | ✅ Live (tested) | Render env `NOTION_CLIENT_ID/SECRET` |
-| Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ⚠️ Keys live; test account has no Jira site (Atlassian: "Access denied") | Render env `JIRA_CLIENT_ID/SECRET` |
+| Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ✅ Live (tested on dhruvsakhare2006.atlassian.net, project KAN) | Render env `JIRA_CLIENT_ID/SECRET` |
 | Render | Hosting + Postgres | ✅ Live (free tier: sleeps after ~15 min idle) | — |
 
 ---
@@ -144,7 +144,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 4. (Done) Sidebar/scan-dialog jargon and fake "System Health 94.2%" removed. Executive PDF report on Simulator still uses invented dollar figures.
 
 **Should**
-5. Jira: create a free Jira Cloud site on the Atlassian account, then **Connect Jira** on Integrations. Scans still use the server's GitHub token (public repos only); Notion/Jira *sync* still uses sample data.
+5. (Done) Jira connects per user. Scans still use the server's GitHub token (public repos only); Notion/Jira *sync* still uses sample data.
 6. Notion backlog DB (needs guide approval): separate `NOTION_BACKLOG_DATABASE_ID` for sync; real report publishing.
 7. Audit Simulator and Data Quality pages.
 8. Store scan history so the Dashboard risk trend can show real data.

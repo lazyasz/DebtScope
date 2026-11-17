@@ -6,6 +6,7 @@ prioritized backlog synchronization, and executive audit report publication.
 
 import json
 import httpx
+from urllib.parse import quote
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
@@ -72,7 +73,7 @@ class NotionProvider(IntegrationProvider):
         
         base_url = "https://api.notion.com/v1/oauth/authorize"
         r_uri = redirect_uri or self.redirect_uri
-        return f"{base_url}?client_id={self.client_id}&response_type=code&owner=user&redirect_uri={r_uri}&state={state}"
+        return f"{base_url}?client_id={self.client_id}&response_type=code&owner=user&redirect_uri={quote(r_uri, safe='')}&state={state}"
 
     async def exchange_code(self, code: str, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges authorization code for Notion Workspace token."""
@@ -104,6 +105,8 @@ class NotionProvider(IntegrationProvider):
                 }
             )
             data = resp.json()
+            if resp.status_code != 200 or not data.get("access_token"):
+                raise ValueError(data.get("error_description") or data.get("message") or f"Notion returned {resp.status_code}")
             return {
                 "access_token": data.get("access_token"),
                 "workspace_id": data.get("workspace_id"),
@@ -150,12 +153,30 @@ class NotionProvider(IntegrationProvider):
         }
 
     async def get_resources(self, connection: Optional[IntegrationConnection], query: Optional[str] = None) -> Dict[str, Any]:
-        """Fetches accessible Notion databases and roadmap pages."""
-        dbs = SANDBOX_NOTION_DATABASES
+        """Lists the databases the user's own Notion connection was given access to."""
+        token = TokenSecurity.decrypt(connection.access_token_enc) if connection else None
+        if not token:
+            return {"databases": [], "total_count": 0, "error": "Not connected"}
+        body = {"filter": {"property": "object", "value": "database"}, "page_size": 100}
         if query:
-            q = query.lower()
-            dbs = [d for d in dbs if q in d["title"].lower() or q in d["workspace"].lower()]
-        return {"databases": dbs, "total_count": len(dbs), "source": "notion_catalog"}
+            body["query"] = query
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.notion.com/v1/search",
+                json=body,
+                headers={"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"},
+            )
+        if resp.status_code != 200:
+            return {"databases": [], "total_count": 0, "error": f"Notion returned {resp.status_code}; try reconnecting."}
+        dbs = [
+            {
+                "id": d["id"],
+                "title": "".join(t.get("plain_text", "") for t in d.get("title", [])) or "Untitled database",
+                "url": d.get("url"),
+            }
+            for d in resp.json().get("results", [])
+        ]
+        return {"databases": dbs, "total_count": len(dbs), "source": "live_notion_api"}
 
     async def sync(self, connection: Optional[IntegrationConnection], resource_ids: List[str], db: Session) -> Dict[str, Any]:
         """Synchronizes prioritized technical debt items into Notion databases."""

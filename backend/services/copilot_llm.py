@@ -5,6 +5,7 @@ Enforces XML data boundaries, prompt injection resistance, and grounded tool cal
 """
 
 import json
+import logging
 import asyncio
 import re
 from abc import ABC, abstractmethod
@@ -13,6 +14,8 @@ import httpx
 
 from backend.config import settings
 from backend.services.copilot_tools import CopilotToolRegistry, COPILOT_TOOL_SCHEMAS
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are DebtScope Copilot, an enterprise AI assistant for technical debt prioritization and architectural refactoring.
 You are strictly grounded in repository telemetry, 5D decision metrics, and SZZ defect prediction.
@@ -420,7 +423,9 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
             return
 
         # Use Google Gemini REST streaming API
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent"
+        base = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
+        # The main model is often overloaded on the free tier; the lite model is the fallback
+        models = list(dict.fromkeys([settings.GEMINI_MODEL, "gemini-flash-lite-latest"]))
         # Key in a header, not the URL, so it never shows up in logs or exception messages
         headers = {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
 
@@ -446,16 +451,35 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
             "tools": gemini_tools,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
             try:
-                res = await client.post(url, headers=headers, json=payload)
-                if res.status_code != 200:
-                    yield CopilotStreamEvent("error", f"Gemini API Error ({res.status_code}): {res.text}")
-                    return
+                # Up to 4 rounds: Gemini may ask for tool data before it can answer
+                for _ in range(4):
+                    res = None
+                    for model in list(models):
+                        try:
+                            res = await client.post(base.format(model), headers=headers, json=payload)
+                        except httpx.TimeoutException:
+                            res = httpx.Response(503)  # hung = busy; try the next model
+                        if res.status_code not in (429, 500, 503):
+                            break
+                        if len(models) > 1:
+                            models.remove(model)  # busy: skip it for the rest of this answer
+                            models.append(model)
+                    if res.status_code != 200:
+                        logger.warning("Gemini returned %s: %s", res.status_code, res.text[:500])
+                        if res.status_code in (429, 500, 503):
+                            msg = "The AI is busy right now. Please try again in a minute."
+                        elif res.status_code in (400, 401, 403):
+                            msg = "The AI service isn't set up correctly on this server."
+                        else:
+                            msg = "The AI couldn't answer right now. Please try again."
+                        yield CopilotStreamEvent("error", msg)
+                        return
 
-                data = res.json()
-                for candidate in data.get("candidates", []):
+                    candidate = (res.json().get("candidates") or [{}])[0]
                     parts = candidate.get("content", {}).get("parts", [])
+                    responses = []
                     for part in parts:
                         if "text" in part:
                             yield CopilotStreamEvent("token", part["text"])
@@ -473,10 +497,19 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
                                     "arguments": tool_res.get("arguments", {}),
                                     "expires_at": tool_res.get("expires_at"),
                                 })
+                            responses.append({"functionResponse": {"name": tool_name, "response": {"result": json.loads(json.dumps(tool_res, default=str))}}})
+                    if not responses:
+                        break
+                    # Hand the tool results back so Gemini can write the actual answer
+                    payload["contents"] = payload["contents"] + [
+                        {"role": "model", "parts": parts},
+                        {"role": "user", "parts": responses},
+                    ]
 
                 yield CopilotStreamEvent("done", {"provider": "gemini"})
             except Exception as e:
-                yield CopilotStreamEvent("error", f"Failed communicating with Gemini: {str(e)}")
+                logger.exception("Gemini request failed: %s", e)
+                yield CopilotStreamEvent("error", "The AI couldn't be reached. Please try again in a minute.")
 
 
 def get_copilot_llm() -> BaseCopilotLLM:

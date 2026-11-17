@@ -66,16 +66,16 @@ export default function Header({ onMenuClick, onOpenScanModal }) {
 
   const getPageTitle = () => {
     switch (location.pathname) {
-      case '/dashboard': return 'Dashboard Overview';
-      case '/integrations': return 'Connected Integrations Hub';
-      case '/simulator': return 'What-If & ROI Simulator';
-      case '/debt': return 'Technical Debt Inventory';
-      case '/predictions': return 'ML Defect Predictions';
-      case '/priorities': return '5D Remediation Matrix';
+      case '/dashboard': return 'Dashboard';
+      case '/integrations': return 'Integrations';
+      case '/simulator': return 'What-If Simulator';
+      case '/debt': return 'Technical debt';
+      case '/predictions': return 'Risk Predictions';
+      case '/priorities': return 'What to fix first';
       case '/hotspots': return 'Code Hotspots';
-      case '/data-quality': return 'Data Quality & Lineage';
-      case '/copilot': return 'Engineering Copilot';
-      default: return 'DebtScope Platform';
+      case '/data-quality': return 'Data Quality';
+      case '/copilot': return 'AI Copilot';
+      default: return 'DebtScope';
     }
   };
 

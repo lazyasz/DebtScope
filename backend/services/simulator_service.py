@@ -1,7 +1,5 @@
 """
-Simulator, AI Remediation Recipe, CI/CD PR Gate, and Executive Audit Service.
-Provides mathematical what-if risk simulations, AI refactoring blueprints,
-automated CI/CD PR defect risk evaluation, and executive compliance reports.
+What-If simulation (runs the trained defect model) and AI remediation recipes.
 """
 
 from typing import Dict, Any, List, Optional
@@ -11,23 +9,22 @@ import time
 
 _predictor_instance = None
 
-def get_ml_predictor():
-    global _predictor_instance
-    if _predictor_instance is None:
-        try:
-            from ml_engine.src.predictor import MLDefectPredictor
-            candidates = [
-                "ml_engine/models/real_defect_predictor.pkl",
-                "ml_engine/models/rf_defect_model.pkl",
-                "../ml_engine/models/real_defect_predictor.pkl"
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    _predictor_instance = MLDefectPredictor(model_path=c)
-                    break
-        except Exception as e:
-            print(f"[-] ML predictor load note: {e}")
-    return _predictor_instance
+def _predict_faults(churn: float, complexity: float, debt_minutes: float, experience: float, refactorings: float) -> Optional[float]:
+    """Runs the trained defect model (the one scans use) on what-if inputs; None if it isn't available."""
+    from backend.services.repo_scanner_service import RepoScannerService
+    import numpy as np
+    bundle = RepoScannerService.get_defect_model()
+    if not bundle or "model" not in bundle:
+        return None
+    smells = debt_minutes / 25.0
+    # Same feature layout the repository scanner feeds the model
+    vec = np.array([[churn * 18, churn * 4, churn * 22, 300, 0, 0, smells, debt_minutes,
+                     1 if complexity > 18 else 0, 1 if complexity > 14 else 0, smells // 2, smells,
+                     refactorings, experience]])
+    try:
+        return max(0.0, float(bundle["model"].predict(vec)[0]))
+    except Exception:
+        return None
 
 
 def calculate_what_if_simulation(
@@ -70,22 +67,10 @@ def calculate_what_if_simulation(
         "aggressive": 1.25     # High speed, maximum debt burn-down
     }.get(risk_tolerance.lower(), 1.0)
 
-    predictor = get_ml_predictor()
-
-    # Baseline ML Prediction
-    baseline_features = {
-        "churn": float(current_churn),
-        "author_experience": float(current_experience),
-        "technical_debt_minutes": float(current_debt_minutes),
-        "refactoring_count": 1.0,
-        "jira_issue_count": 1.0,
-        "cyclomatic_complexity": float(current_complexity),
-        "code_churn": float(current_churn)
-    }
-    
-    if predictor:
-        b_res = predictor.predict_single(baseline_features)
-        baseline_faults = round(b_res["predicted_risk_score"] / 10.0, 2)
+    model_faults = _predict_faults(current_churn, current_complexity, current_debt_minutes, current_experience, 1.0)
+    model_used = "random_forest" if model_faults is not None else "formula"
+    if model_faults is not None:
+        baseline_faults = round(model_faults, 2)
     else:
         # Mathematical fallback
         baseline_faults = round((current_churn * 0.02) + (current_complexity * 0.25) + (current_debt_minutes * 0.015) / max(1, current_experience * 0.1), 2)
@@ -97,19 +82,9 @@ def calculate_what_if_simulation(
     simulated_complexity = max(1.0, current_complexity * (1.0 - 0.5 * (effort_effective / 100.0)))
     simulated_debt_minutes = max(0.0, current_debt_minutes * reduction_factor)
 
-    simulated_features = {
-        "churn": float(simulated_churn),
-        "author_experience": float(simulated_experience),
-        "technical_debt_minutes": float(simulated_debt_minutes),
-        "refactoring_count": float(1.0 + (effort_effective / 20.0)),
-        "jira_issue_count": max(0.0, 1.0 - (effort_effective / 100.0)),
-        "cyclomatic_complexity": float(simulated_complexity),
-        "code_churn": float(simulated_churn)
-    }
-    
-    if predictor:
-        s_res = predictor.predict_single(simulated_features)
-        raw_sim_faults = s_res["predicted_risk_score"] / 10.0
+    sim_model = _predict_faults(simulated_churn, simulated_complexity, simulated_debt_minutes, simulated_experience, 1.0 + (effort_effective / 20.0)) if model_used == "random_forest" else None
+    if sim_model is not None:
+        raw_sim_faults = sim_model
     else:
         raw_sim_faults = (simulated_churn * 0.02) + (simulated_complexity * 0.25) + (simulated_debt_minutes * 0.015) / max(1, simulated_experience * 0.1)
     
@@ -197,6 +172,7 @@ def calculate_what_if_simulation(
     }
 
     return {
+        "model_used": model_used,
         "baseline": {
             "predicted_faults": baseline_faults,
             "risk_level": get_risk_label(baseline_faults),
@@ -229,160 +205,6 @@ def calculate_what_if_simulation(
         "projection_curves": projection_curves,
         "jira_package": jira_package
     }
-
-
-def calculate_financial_tco_engine(
-    hourly_rate: float = 85.0,
-    team_size: int = 12,
-    sprint_length_weeks: int = 2,
-    velocity_drag_pct: float = 24.5
-) -> Dict[str, Any]:
-    """
-    Executive Financial Total Cost of Ownership (TCO) & Interest Engine.
-    Converts engineering friction and debt metrics into rigorous boardroom financial models:
-    - Principal Debt ($): Total remediation hours * average developer hourly rate.
-    - Monthly Interest ($): Velocity drag cost + bug fix overhead resulting from unaddressed debt.
-    - Payback Period: Time in months until refactoring investment pays for itself.
-    - Net 12-Month ROI & Cost of Inaction compounding curve.
-    - Breakdown of debt cost by Subsystem.
-    """
-    # 1. Platform-wide baseline figures
-    total_debt_hours = 1420.5
-    principal_debt_usd = round(total_debt_hours * hourly_rate, 2)
-
-    # Monthly developer team capacity in hours (team_size * 160h/mo)
-    monthly_team_hours = team_size * 160.0
-    
-    # Monthly drag interest:
-    # A) Velocity Drag Cost = monthly_team_hours * (velocity_drag_pct / 100) * hourly_rate
-    velocity_drag_monthly_usd = round(monthly_team_hours * (velocity_drag_pct / 100.0) * hourly_rate, 2)
-    
-    # B) Monthly Defect Triage Overhead = ~18 defects/month * 16.5 hrs/defect * hourly_rate
-    monthly_defects = 18.0
-    defect_overhead_monthly_usd = round(monthly_defects * 16.5 * hourly_rate, 2)
-    
-    monthly_interest_drag_usd = round(velocity_drag_monthly_usd + defect_overhead_monthly_usd, 2)
-    annualized_waste_usd = round(monthly_interest_drag_usd * 12.0, 2)
-
-    # Payback period (months to breakeven if remediating 60% of principal debt)
-    remediation_investment_usd = round(principal_debt_usd * 0.60, 2)
-    monthly_interest_saved_usd = round(monthly_interest_drag_usd * 0.65, 2)
-    payback_period_months = round(remediation_investment_usd / max(1.0, monthly_interest_saved_usd), 1)
-
-    # Net 1-Year ROI
-    annual_drag_savings_usd = round(monthly_interest_saved_usd * 12.0, 2)
-    net_first_year_savings_usd = round(annual_drag_savings_usd - remediation_investment_usd, 2)
-    roi_multiplier = round(max(1.0, annual_drag_savings_usd / max(1.0, remediation_investment_usd)), 1)
-
-    # 2. Subsystem Breakdown
-    subsystems = [
-        {
-            "id": "sub_01",
-            "name": "Core Lakehouse Ingestion Engine",
-            "loc": 184500,
-            "complexity_avg": 24.8,
-            "remediation_hours": 420.0,
-            "principal_debt_usd": round(420.0 * hourly_rate, 2),
-            "monthly_drag_usd": round(14500.0 * (hourly_rate / 85.0), 2),
-            "payback_months": 2.1,
-            "risk_tier": "CRITICAL",
-            "recommended_action": "Decompose monolithic stream transformer into domain events"
-        },
-        {
-            "id": "sub_02",
-            "name": "Enterprise Auth & RBAC Gateway",
-            "loc": 64200,
-            "complexity_avg": 21.2,
-            "remediation_hours": 285.0,
-            "principal_debt_usd": round(285.0 * hourly_rate, 2),
-            "monthly_drag_usd": round(9800.0 * (hourly_rate / 85.0), 2),
-            "payback_months": 2.4,
-            "risk_tier": "HIGH",
-            "recommended_action": "Deprecate legacy JWT session validator and introduce zero-trust guard"
-        },
-        {
-            "id": "sub_03",
-            "name": "Spark Streaming Analytics & Aggregators",
-            "loc": 128400,
-            "complexity_avg": 19.5,
-            "remediation_hours": 340.0,
-            "principal_debt_usd": round(340.0 * hourly_rate, 2),
-            "monthly_drag_usd": round(11200.0 * (hourly_rate / 85.0), 2),
-            "payback_months": 2.6,
-            "risk_tier": "HIGH",
-            "recommended_action": "Refactor shuffle joins and eliminate unindexed DataFrame scans"
-        },
-        {
-            "id": "sub_04",
-            "name": "REST API Gateway & OpenAPI Routers",
-            "loc": 52100,
-            "complexity_avg": 14.0,
-            "remediation_hours": 195.0,
-            "principal_debt_usd": round(195.0 * hourly_rate, 2),
-            "monthly_drag_usd": round(6100.0 * (hourly_rate / 85.0), 2),
-            "payback_months": 2.7,
-            "risk_tier": "MEDIUM",
-            "recommended_action": "Standardize Pydantic v2 schemas and response serialization caching"
-        },
-        {
-            "id": "sub_05",
-            "name": "Executive Reporting & PDF Generator",
-            "loc": 38900,
-            "complexity_avg": 11.5,
-            "remediation_hours": 180.5,
-            "principal_debt_usd": round(180.5 * hourly_rate, 2),
-            "monthly_drag_usd": round(4400.0 * (hourly_rate / 85.0), 2),
-            "payback_months": 3.4,
-            "risk_tier": "LOW",
-            "recommended_action": "Decouple synchronous print rendering into background worker task"
-        }
-    ]
-
-    # 3. 12-Month Compounding Inaction Drag vs Remediated Trajectory
-    twelve_month_projection = []
-    accumulated_inaction_cost = 0.0
-    accumulated_remediated_cost = remediation_investment_usd  # Initial upfront investment
-
-    # Compounding drag growth factor (debt interest compounds at ~2.5% monthly if ignored)
-    for m in range(1, 13):
-        # Inaction scenario: compounding drag grows
-        compounding_monthly_drag = monthly_interest_drag_usd * (1.0 + (0.025 * (m - 1)))
-        accumulated_inaction_cost += compounding_monthly_drag
-
-        # Remediated scenario: reduced drag + initial investment amortized
-        reduced_monthly_drag = monthly_interest_drag_usd * 0.35
-        accumulated_remediated_cost += reduced_monthly_drag
-
-        net_savings = accumulated_inaction_cost - accumulated_remediated_cost
-
-        twelve_month_projection.append({
-            "month": f"M{m}",
-            "inaction_cumulative_cost": round(accumulated_inaction_cost, 2),
-            "remediated_cumulative_cost": round(accumulated_remediated_cost, 2),
-            "net_cumulative_savings": round(max(0.0, net_savings), 2),
-            "monthly_drag_tax": round(compounding_monthly_drag, 2)
-        })
-
-    return {
-        "kpis": {
-            "principal_debt_usd": principal_debt_usd,
-            "total_debt_hours": total_debt_hours,
-            "hourly_rate": hourly_rate,
-            "monthly_interest_drag_usd": monthly_interest_drag_usd,
-            "velocity_drag_monthly_usd": velocity_drag_monthly_usd,
-            "defect_overhead_monthly_usd": defect_overhead_monthly_usd,
-            "annualized_waste_usd": annualized_waste_usd,
-            "payback_period_months": payback_period_months,
-            "remediation_investment_usd": remediation_investment_usd,
-            "annual_drag_savings_usd": annual_drag_savings_usd,
-            "net_first_year_savings_usd": net_first_year_savings_usd,
-            "roi_multiplier": roi_multiplier,
-            "velocity_drag_pct": velocity_drag_pct
-        },
-        "subsystems": subsystems,
-        "twelve_month_projection": twelve_month_projection
-    }
-
 
 
 def generate_ai_remediation_recipe(file_path: str, risk_score: float, debt_minutes: float, complexity: float) -> Dict[str, Any]:
@@ -490,149 +312,3 @@ def generate_ai_remediation_recipe(file_path: str, risk_score: float, debt_minut
             "recommended_sprint_points": max(1, math.ceil(debt_minutes / 60.0 * 1.5))
         }
     }
-
-
-def evaluate_ci_cd_pull_request(
-    pr_number: int,
-    pr_title: str,
-    author: str,
-    author_experience_commits: int,
-    target_branch: str,
-    changed_files: List[Dict[str, Any]]
-) -> Dict[str, Any]:
-    """
-    Evaluates a simulated Pull Request as a CI/CD Quality Gate:
-    1. Computes total churn and peak cyclomatic complexity diff.
-    2. Runs ML defect risk scoring across all modified files.
-    3. Evaluates against company safety policy (Risk increase <= 15%, No critical hotspots introduced).
-    4. Issues 'PASSED' or 'BLOCKED' status with actionable line comments.
-    """
-    total_added = sum(f.get("lines_added", 0) for f in changed_files)
-    total_deleted = sum(f.get("lines_deleted", 0) for f in changed_files)
-    total_churn = total_added + total_deleted
-
-    analyzed_files = []
-    peak_risk = 0.0
-
-    predictor = get_ml_predictor()
-
-    for f in changed_files:
-        f_churn = f.get("lines_added", 10) + f.get("lines_deleted", 5)
-        f_complexity = f.get("cyclomatic_complexity", 8.0)
-        f_debt = f.get("debt_minutes", 45.0)
-
-        feat = {
-            "churn": float(f_churn),
-            "author_experience": float(max(1, author_experience_commits)),
-            "technical_debt_minutes": float(f_debt),
-            "refactoring_count": 1.0,
-            "jira_issue_count": 1.0,
-            "cyclomatic_complexity": float(f_complexity),
-            "code_churn": float(f_churn)
-        }
-        
-        if predictor:
-            p_res = predictor.predict_single(feat)
-            faults = round(p_res["predicted_risk_score"] / 10.0, 2)
-        else:
-            faults = round((f_churn * 0.02) + (f_complexity * 0.2) + (f_debt * 0.01) / max(1, author_experience_commits * 0.2), 2)
-        
-        peak_risk = max(peak_risk, faults)
-
-        status_flag = "SAFE"
-        if faults >= 4.0: status_flag = "CRITICAL_HOTSPOT"
-        elif faults >= 2.0: status_flag = "ELEVATED_RISK"
-
-        analyzed_files.append({
-            "filename": f.get("filename", "unknown.py"),
-            "lines_added": f.get("lines_added", 0),
-            "lines_deleted": f.get("lines_deleted", 0),
-            "complexity": f_complexity,
-            "predicted_faults": faults,
-            "status": status_flag
-        })
-
-    # Policy Decision Logic
-    is_blocked = peak_risk >= 4.0 or (total_churn > 400 and author_experience_commits < 5)
-    
-    if is_blocked:
-        gate_status = "BLOCKED"
-        gate_reason = (
-            f"CI/CD Quality Gate Blocked: PR #{pr_number} introduces critical defect risk "
-            f"(Peak Fault Score: {peak_risk:.2f}). High-churn modifications require senior peer review "
-            "and unit test coverage >= 80%."
-        )
-    else:
-        gate_status = "PASSED"
-        gate_reason = f"CI/CD Quality Gate Passed: All {len(changed_files)} files within defect risk tolerance bounds."
-
-    return {
-        "pr_number": pr_number,
-        "pr_title": pr_title,
-        "author": author,
-        "target_branch": target_branch,
-        "gate_status": gate_status,
-        "gate_reason": gate_reason,
-        "summary": {
-            "total_files_changed": len(changed_files),
-            "total_churn": total_churn,
-            "peak_defect_risk": round(peak_risk, 2),
-            "policy_threshold": 4.0,
-            "requires_senior_approval": is_blocked
-        },
-        "file_assessments": analyzed_files
-    }
-
-
-def generate_executive_audit_summary() -> Dict[str, Any]:
-    """
-    Compiles an executive-level Technical Debt & Defect Intelligence Audit Report.
-    """
-    # Compute overall platform metrics from Lakehouse
-    summary = {
-        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "organization": "DebtScope Architecture Intelligence Board",
-        "overall_health_grade": "A- (Strong Defect Governance)",
-        "health_score_index": 88.5,
-        "monitored_repositories": 31,
-        "ingested_lakehouse_records": 2933680,
-        "analyzed_gold_features": 1037222,
-        "data_quality_gates_compliance": "100.0% (12 of 12 Passed)",
-        "executive_kpis": {
-            "total_technical_debt_hours": 1420.5,
-            "estimated_annual_cost_of_debt": "$120,742.50",
-            "projected_savings_with_debtscope": "$58,400.00",
-            "mean_time_to_remediate_hotspot": "2.4 Sprints",
-            "defect_prediction_accuracy_lift": "+35.18% over Mean Baseline"
-        },
-        "top_hotspot_actions": [
-            {
-                "rank": 1,
-                "module": "apache/zookeeper -> DataTree.java",
-                "risk_score": 94.2,
-                "fault_probability": "High (5.8 defects)",
-                "recommended_action": "Decompose into ConcurrentTreeMap & StateEventBus"
-            },
-            {
-                "rank": 2,
-                "module": "apache/hive -> Driver.java",
-                "risk_score": 89.6,
-                "fault_probability": "Elevated (4.2 defects)",
-                "recommended_action": "Extract AST QueryPlanner from execution pipeline"
-            },
-            {
-                "rank": 3,
-                "module": "apache/felix -> BundleInfo.java",
-                "risk_score": 82.1,
-                "fault_probability": "Moderate (3.1 defects)",
-                "recommended_action": "Refactor OSGi Manifest Parser into immutable value objects"
-            }
-        ],
-        "compliance_certifications": [
-            "Lenarduzzi et al., PROMISE '19 Verified",
-            "Empirical SZZ Defect Target Compliance",
-            "Zero-Leakage ML Model Validation Gate",
-            "Medallion Lineage Integrity Verified"
-        ]
-    }
-    return summary

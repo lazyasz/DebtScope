@@ -107,7 +107,7 @@ All APIs are under `/api/v1` (also `/api`) and need a signed-in session cookie u
 | Hotspots | `GET /hotspots` (now includes LOC, complexity, smells, duplication, churn) |
 | Risk Predictions | `GET /predictions`, `GET /predictions/model-info`, `GET /priorities` |
 | File details | `GET /files/{file_id}`, `POST /recommendations/ai-recipe` |
-| Simulator | `POST /simulator/what-if`, `POST /simulator/financial-tco`, `POST /ci-cd/evaluate-pr` |
+| Simulator | `POST /simulator/what-if` (real defect model on a chosen file) |
 | Copilot | `/copilot/*` (conversations, chat) |
 | Integrations | `GET /integrations/status`, `/integrations/{provider}/auth-url\|callback\|resources\|sync\|disconnect`, `POST /integrations/jira/create-issue`, `POST /integrations/jira/bulk-export`, `POST /integrations/notion/sync`, `POST /integrations/notion/ingest-criticality` |
 | Public | `GET /health`, `/privacy`, `/terms` |

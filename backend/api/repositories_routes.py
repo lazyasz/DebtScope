@@ -7,8 +7,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
-from backend.database.models import Repository, SourceFile, PriorityScore, Workspace
-from backend.database.tenant import get_current_workspace
+from backend.database.models import Repository, SourceFile, PriorityScore, Workspace, User, IntegrationConnection
+from backend.database.tenant import get_current_workspace, get_current_user
 from backend.schemas.repository import (
     RepositoryCreate,
     RepositoryResponse,
@@ -123,10 +123,11 @@ def scan_repository(
     payload: RepoScanRequest,
     background_tasks: BackgroundTasks,
     workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Scans a GitHub repository.
+    Scans a GitHub repository (private ones too when the user connected their GitHub).
     If background=True, queues a sandboxed background analysis job and returns 202.
     Otherwise executes synchronously for backward-compatible demonstration.
     """
@@ -156,7 +157,14 @@ def scan_repository(
 
     from backend.services.repo_scanner_service import RepoScannerService
     try:
-        result = RepoScannerService.scan_github_repository(db, payload.url, workspace.id)
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.user_id == user.id,
+            IntegrationConnection.provider == "github",
+            IntegrationConnection.status == "CONNECTED",
+        ).first()
+        from backend.integrations.token_security import TokenSecurity
+        user_token = TokenSecurity.decrypt(conn.access_token_enc) if conn and conn.access_token_enc else None
+        result = RepoScannerService.scan_github_repository(db, payload.url, workspace.id, user_token)
         return result
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

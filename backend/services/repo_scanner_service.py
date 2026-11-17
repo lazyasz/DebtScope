@@ -87,7 +87,7 @@ class RepoScannerService:
         return owner, repo_name, canonical_url
 
     @classmethod
-    def scan_github_repository(cls, db: Session, repo_url: str, workspace_id: str = "ws_demo") -> Dict[str, Any]:
+    def scan_github_repository(cls, db: Session, repo_url: str, workspace_id: str = "ws_demo", github_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Scans any public GitHub repository URL or Apache project key.
         Extracts live file trees, computes real AST metrics, applies real ML models,
@@ -112,7 +112,7 @@ class RepoScannerService:
                 print(f"[-] Lakehouse parquet lookup note: {e}")
 
         # Execute Live Scan via GitHub REST API & Real AST Analyzer
-        return cls._scan_live_github_api(db, owner, repo_name, canonical_url, workspace_id)
+        return cls._scan_live_github_api(db, owner, repo_name, canonical_url, workspace_id, github_token)
 
     @classmethod
     def _analyze_source_code(cls, code_text: str, file_path: str, language: str) -> Dict[str, Any]:
@@ -216,13 +216,14 @@ class RepoScannerService:
         }
 
     @classmethod
-    def _scan_live_github_api(cls, db: Session, owner: str, repo_name: str, repo_url: str, workspace_id: str = "ws_demo") -> Dict[str, Any]:
+    def _scan_live_github_api(cls, db: Session, owner: str, repo_name: str, repo_url: str, workspace_id: str = "ws_demo", github_token: Optional[str] = None) -> Dict[str, Any]:
         """Scans a live GitHub repo using GitHub REST API, file tree extraction, and real code analysis."""
         headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "DebtScope-Engine/1.0"
         }
-        token = settings.GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
+        # The user's own GitHub sign-in (reaches their private repos) beats the server token
+        token = github_token or settings.GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"token {token}"
 
@@ -337,7 +338,7 @@ class RepoScannerService:
             if idx < 10:
                 try:
                     raw_code_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/{fpath}"
-                    code_resp = requests.get(raw_code_url, timeout=2.0)
+                    code_resp = requests.get(raw_code_url, headers={"Authorization": headers["Authorization"]} if "Authorization" in headers else None, timeout=4.0)
                     if code_resp.status_code == 200 and len(code_resp.text) > 0:
                         ast_metrics = cls._analyze_source_code(code_resp.text, fpath, lang)
                 except Exception:

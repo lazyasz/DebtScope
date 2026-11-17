@@ -26,7 +26,6 @@ import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import ScanRepoModal from '../components/common/ScanRepoModal';
 import RemediationRecipeModal from '../components/remediation/RemediationRecipeModal';
-import ExecutiveReportModal from '../components/reports/ExecutiveReportModal';
 import ChartTooltip from '../components/ui/ChartTooltip';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
 import InteractiveCard from '../components/ui/InteractiveCard';
@@ -47,7 +46,6 @@ export default function Dashboard() {
   const { data, loading, error, refresh } = useMetrics();
   const { notify, setSettingsOpen } = useAuth();
   const [scanModalOpen, setScanModalOpen] = useState(false);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [selectedFileForRecipe, setSelectedFileForRecipe] = useState(null);
   const navigate = useNavigate();
@@ -490,11 +488,6 @@ export default function Dashboard() {
         isOpen={recipeModalOpen}
         onClose={() => setRecipeModalOpen(false)}
         targetFile={selectedFileForRecipe}
-      />
-
-      <ExecutiveReportModal
-        isOpen={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
       />
     </div>
   );

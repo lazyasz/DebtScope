@@ -176,7 +176,7 @@ export default function CopilotShell() {
           m.id === assistantMsgId
             ? {
                 ...m,
-                error: `Service Unavailable: ${err.message}. Ensure your backend server is active and COPILOT_LLM_PROVIDER is configured.`,
+                error: 'The AI couldn\'t be reached. Check your connection and try again.',
               }
             : m
         )

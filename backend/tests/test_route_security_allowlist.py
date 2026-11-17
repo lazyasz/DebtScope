@@ -64,10 +64,7 @@ EXPLICIT_PUBLIC_ALLOWLIST: Dict[str, str] = {
 
     # Simulation, PR Checks & Sandbox Calculators
     "/simulator/what-if": "Stateless what-if priority recalculation simulator.",
-    "/simulator/financial-tco": "Stateless financial technical debt cost calculation engine.",
     "/recommendations/ai-recipe": "Stateless remediation recipe generator for code snippets.",
-    "/ci-cd/evaluate-pr": "Stateless CI/CD pull request gate evaluator.",
-    "/reports/executive-summary": "Stateless executive summary generator for demo reports.",
 
     # Integration OAuth Callbacks & External Webhooks
     "/integrations/status": "Ecosystem integration connectivity status checker.",

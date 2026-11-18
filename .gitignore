@@ -36,3 +36,4 @@ data/backtest_repos/
 # OS Files
 .DS_Store
 Thumbs.db
+report_build/

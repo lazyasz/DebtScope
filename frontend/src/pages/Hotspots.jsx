@@ -54,7 +54,7 @@ export default function Hotspots() {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
 
-  if (loading) return <LoadingState message="Extracting Lexical AST metrics & God-classes..." />;
+  if (loading) return <LoadingState message="Finding your hotspots..." />;
   if (error) return <ErrorState message={error} />;
   if (!data || data.length === 0) {
     return <EmptyState title="No hotspots yet" message="Files become hotspots when technical risk or business impact reaches 70+. Scan a repository to find them." />;
@@ -105,7 +105,9 @@ export default function Hotspots() {
   const churnEstimated = raw.some((r) => r.churn_provenance && r.churn_provenance !== 'MEASURED');
   const dupVals = nums('duplication_pct');
   const avgDup = dupVals.length ? dupVals.reduce((a, b) => a + b, 0) / dupVals.length : 0;
-  const criticalCount = raw.filter((r) => r.technical_risk >= 80).length;
+
+  // Same rule as the 'Critical (≥80)' filter tab, so the two numbers always match
+  const criticalCount = normalizedList.filter((i) => parseFloat(i.riskScore) >= 80).length;
 
   const severityTabs = [
     { id: 'ALL', label: 'All Hotspots', count: normalizedList.length },

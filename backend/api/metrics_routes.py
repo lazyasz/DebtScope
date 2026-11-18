@@ -227,7 +227,10 @@ def get_dashboard_summary(
         {
             "id": f.id,
             "file": f.file_path,
-            "risk_score": round(f.metrics.technical_risk_score if f.metrics else 50.0, 1),
+            # Same combined technical risk (static + ML) shown on File details and Hotspots;
+            # the static score alone saturates at 100 for every very complex file
+            "risk_score": round(f.priority_score.composite_technical_risk if f.priority_score
+                                else (f.metrics.technical_risk_score if f.metrics else 50.0), 1),
             "priority_level": f.priority_score.priority_level if f.priority_score else "MEDIUM",
             "category": f.priority_score.quadrant if f.priority_score else "STRATEGIC_REFACTOR"
         }

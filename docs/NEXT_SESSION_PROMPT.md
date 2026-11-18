@@ -42,8 +42,8 @@ cp .env.example .env      # then fill in values (see below)
   - Jira: lists the user's projects; Export to Jira creates real tickets (tested: KAN-4…KAN-10).
     The Atlassian app "DebtScope Platform" is set to Sharing with anyone, so any user can connect.
     Its "stores personal data" answer should be No (DebtScope stores site IDs, not user account IDs).
-  - Notion: lists the user's databases; Send to Notion adds pages. Needs a normal database shared
-    with the DebtScope connection (Notion's special "People" database refuses new rows).
+  - Notion: lists the user's databases; Send to Notion adds pages (tested live). If a user has no
+    usable database, the dialog creates a "DebtScope backlog" database in a page they shared.
 - Docs: `docs/PRD.md` is the source of truth for users, flows, pages, APIs and status.
 
 ## 4. Rules (keep these)
@@ -56,9 +56,9 @@ cp .env.example .env      # then fill in values (see below)
 
 ## 5. Open items
 
-1. Show Send to Notion working with a normal Notion database.
-2. Test scanning a private repo with a connected GitHub account.
-3. Optional: keys pasted in chat earlier were never rotated (owner's decision).
+None blocking. Done and tested live on Nov 18: private-repo scan (lazyasz/library-tree-vault, 12 files),
+Send to Notion into "DebtScope backlog", Jira app shared with any user.
+Optional: paid Render plan (no sleep), paid Gemini tier (no "busy"), rotate keys pasted in chat earlier.
 
 ## Prompt to paste into the new AI session
 

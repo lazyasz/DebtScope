@@ -58,7 +58,7 @@ What makes it different from code-quality tools (e.g. SonarQube): it combines **
 
 ### Flow D — Act on it
 - **Export to Jira** (one file or bulk) — creates real tickets in the user's own connected Jira project (picked from their projects; verified live: KAN-4); without a connection it clearly says *Simulated*.
-- **Send to Notion** — adds one page per file to a database the user picks from their own connected Notion; without a connection it says *Simulated*.
+- **Send to Notion** — adds one page per file to a database the user picks from their own connected Notion, or creates a "DebtScope backlog" database in a page they shared (tested live); without a connection it says *Simulated*.
 - **File search** (header) — type part of a file name to jump to that file.
 - **Ask AI** (Dashboard, Hotspots, File details) — opens the Copilot already asking how to fix that file.
 - **AI Copilot** — ask "why is X ranked #1?" or "how do I fix X?" (Gemini).

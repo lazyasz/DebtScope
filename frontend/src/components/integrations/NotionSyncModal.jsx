@@ -100,7 +100,7 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
                 {result.status === 'error' ? <AlertCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
               </div>
               <h4 className="text-base font-bold text-[#161e10]">
-                {result.status === 'error' ? 'Sending to Notion failed' : result.mode === 'live' ? `Added ${result.synced_count} pages` : 'Simulated — Notion not connected'}
+                {result.status === 'error' ? 'Sending to Notion failed' : result.mode === 'live' ? `Added ${result.synced_count} page${result.synced_count === 1 ? '' : 's'}` : 'Simulated — Notion not connected'}
               </h4>
               <p className="text-[#75786d]">
                 {result.status === 'error' ? result.message : result.mode === 'live' ? 'Open them in Notion:' : 'Connect Notion on the Integrations page to add real pages.'}

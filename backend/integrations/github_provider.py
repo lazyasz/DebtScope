@@ -8,6 +8,7 @@ import hmac
 import hashlib
 import json
 import httpx
+from urllib.parse import quote
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
@@ -129,7 +130,9 @@ class GitHubProvider(IntegrationProvider):
         base_url = "https://github.com/login/oauth/authorize"
         scopes = "repo,read:org,read:user,user:email"
         r_uri = redirect_uri or f"{settings.FRONTEND_URL.rstrip('/')}/auth/callback"
-        return f"{base_url}?client_id={self.client_id}&redirect_uri={r_uri}&scope={scopes}&state={state}"
+        # prompt=select_account: GitHub shows its account chooser instead of silently
+        # reusing whoever is signed in to github.com in this browser
+        return f"{base_url}?client_id={self.client_id}&redirect_uri={quote(r_uri, safe='')}&scope={scopes}&state={state}&prompt=select_account"
 
     async def exchange_code(self, code: str, state: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges GitHub code for access token or returns mock identity in sandbox."""

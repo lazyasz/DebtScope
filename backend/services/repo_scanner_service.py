@@ -239,11 +239,16 @@ class RepoScannerService:
             resp = requests.get(meta_url, headers=headers, timeout=6)
             if resp.status_code == 200:
                 meta = resp.json()
+                if meta.get("private") and not github_token:
+                    # The server token must never expose someone's private repo to another user
+                    raise PermissionError("This repository is private. Connect your own GitHub account on the Integrations page to scan it.")
                 default_branch = meta.get("default_branch") or "main"
                 stars = meta.get("stargazers_count", 0)
                 forks = meta.get("forks_count", 0)
                 description = meta.get("description") or f"Public GitHub repository {owner}/{repo_name}"
                 lang = meta.get("language") or "Python"
+        except PermissionError:
+            raise
         except Exception as e:
             print(f"[-] GitHub metadata fetch note: {e}")
 

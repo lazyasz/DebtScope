@@ -166,6 +166,8 @@ def scan_repository(
         user_token = TokenSecurity.decrypt(conn.access_token_enc) if conn and conn.access_token_enc else None
         result = RepoScannerService.scan_github_repository(db, payload.url, workspace.id, user_token)
         return result
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

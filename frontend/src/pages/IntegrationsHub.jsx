@@ -7,7 +7,6 @@ import {
   getProviderResources,
   disconnectProvider,
   scanRepository,
-  ingestNotionCriticality,
 } from '../services/api';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
@@ -18,18 +17,21 @@ const PROVIDERS = {
     icon: GitBranch,
     purpose: 'Connect your GitHub account to pick one of your repositories and scan it.',
     noun: 'repositories',
+    account: 'GitHub will ask which account to use. Pick yours, or choose "Use a different account".',
   },
   notion: {
     title: 'Notion',
     icon: Database,
     purpose: 'Connect your Notion to send top-priority files as pages into one of your databases.',
     noun: 'databases',
+    account: 'Notion uses the account signed in on this browser. To use another, switch it in the menu at the top of Notion\'s screen, or sign out of Notion first.',
   },
   jira: {
     title: 'Jira',
     icon: Layers,
     purpose: 'Connect your Jira site to turn top-priority files into tasks in your own projects.',
     noun: 'projects',
+    account: 'Atlassian uses the account signed in on this browser. To use another, switch it from your avatar on Atlassian\'s screen, or sign out first.',
   },
 };
 
@@ -54,13 +56,13 @@ export default function IntegrationsHub() {
         <p className="text-sm text-[#45483e]">Connect your own accounts. DebtScope only reads what you choose, and you can disconnect at any time.</p>
       </div>
       {Object.keys(PROVIDERS).map((key) => (
-        <ProviderCard key={key} provider={key} state={status[key] || {}} onChange={load} serverNotion={key === 'notion' && status.notion?.mode === 'live'} />
+        <ProviderCard key={key} provider={key} state={status[key] || {}} onChange={load} />
       ))}
     </div>
   );
 }
 
-function ProviderCard({ provider, state, onChange, serverNotion }) {
+function ProviderCard({ provider, state, onChange }) {
   const cfg = PROVIDERS[provider];
   const navigate = useNavigate();
   const connected = !!state.connected;
@@ -126,6 +128,8 @@ function ProviderCard({ provider, state, onChange, serverNotion }) {
 
       <p className="text-sm text-[#45483e]">{cfg.purpose}</p>
 
+      {!connected && <p className="text-xs text-[#75786d]">{cfg.account}</p>}
+
       {!connected && (
         <button onClick={connect} disabled={busy} className={primary}>
           {busy ? 'Opening sign-in...' : `Connect ${cfg.title}`} <ArrowRight className="w-3.5 h-3.5" />
@@ -159,7 +163,6 @@ function ProviderCard({ provider, state, onChange, serverNotion }) {
         </div>
       )}
 
-      {serverNotion && <ServerNotionImport />}
     </section>
   );
 }
@@ -195,35 +198,6 @@ function ResourceRow({ provider, item }) {
         )
       )}
     </li>
-  );
-}
-
-// Workspace-wide Notion table configured on the server (kept until per-user import exists)
-function ServerNotionImport() {
-  const [result, setResult] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const run = async () => {
-    setBusy(true);
-    try {
-      setResult(await ingestNotionCriticality());
-    } catch (e) {
-      setResult({ status: 'error', message: e?.response?.data?.detail || e.message });
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="p-3 rounded-2xl bg-[#f8faf6] border border-[#e5ebe0] space-y-2">
-      <p className="text-xs text-[#45483e]">Optional: import which services matter most from the team's shared Notion table, so business impact uses real values instead of defaults.</p>
-      <button onClick={run} disabled={busy} className={secondary}>{busy ? 'Importing…' : 'Import shared service tiers'}</button>
-      {result && (
-        <p className="text-xs text-[#45483e]">
-          {result.status === 'error'
-            ? `Import failed: ${result.message}`
-            : `Imported ${result.rules_ingested_count} rule(s): ${(result.rules || []).map((r) => `${r.service_name} (${r.tier})`).join(', ')}`}
-        </p>
-      )}
-    </div>
   );
 }
 

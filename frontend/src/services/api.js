@@ -108,11 +108,6 @@ export async function bulkExportJira(payload) {
   return data;
 }
 
-export async function ingestNotionCriticality() {
-  const { data } = await apiClient.post('/api/integrations/notion/ingest-criticality', {});
-  return data;
-}
-
 export async function syncNotion(payload) {
   const { data } = await apiClient.post('/api/integrations/notion/sync', payload, { timeout: 120000 }); // one Notion call per page
   return data;

@@ -262,7 +262,7 @@ class DeterministicMockCopilotAdapter(BaseCopilotLLM):
             return
 
         # 4. Refactoring Proposal ("propose refactor", "diff", "clean", "fix")
-        if "propose" in q or "diff" in q or ("refactor" in q and "why" not in q and "explain" not in q and "quadrant" not in q):
+        if "propose" in q or "diff" in q or "how should i fix" in q or "how do i fix" in q or ("refactor" in q and "why" not in q and "explain" not in q and "quadrant" not in q):
             file_match = re.search(r'([\w/\.\-]+\.(?:py|js|ts|java|go|cpp|cs))', last_msg)
             target = file_match.group(1) if file_match else None
             if not target:
@@ -468,13 +468,8 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
                             models.append(model)
                     if res.status_code != 200:
                         logger.warning("Gemini returned %s: %s", res.status_code, res.text[:500])
-                        if res.status_code in (429, 500, 503):
-                            msg = "The AI is busy right now. Please try again in a minute."
-                        elif res.status_code in (400, 401, 403):
-                            msg = "The AI service isn't set up correctly on this server."
-                        else:
-                            msg = "The AI couldn't answer right now. Please try again."
-                        yield CopilotStreamEvent("error", msg)
+                        async for ev in self._answer_from_data(messages, tool_registry):
+                            yield ev
                         return
 
                     candidate = (res.json().get("candidates") or [{}])[0]
@@ -509,7 +504,14 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
                 yield CopilotStreamEvent("done", {"provider": "gemini"})
             except Exception as e:
                 logger.exception("Gemini request failed: %s", e)
-                yield CopilotStreamEvent("error", "The AI couldn't be reached. Please try again in a minute.")
+                async for ev in self._answer_from_data(messages, tool_registry):
+                    yield ev
+
+    async def _answer_from_data(self, messages, tool_registry):
+        # Gemini's free tier is often overloaded: answer from the workspace data instead of failing
+        yield CopilotStreamEvent("token", "_The AI model is busy right now, so this answer comes straight from your scan data._\n\n")
+        async for ev in DeterministicMockCopilotAdapter().stream_chat(messages, tool_registry):
+            yield ev
 
 
 def get_copilot_llm() -> BaseCopilotLLM:

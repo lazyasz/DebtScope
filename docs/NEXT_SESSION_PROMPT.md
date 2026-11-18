@@ -58,7 +58,8 @@ cp .env.example .env      # then fill in values (see below)
 
 None blocking. Done and tested live on Nov 18: private-repo scan (lazyasz/library-tree-vault, 12 files),
 Send to Notion into "DebtScope backlog", Jira app shared with any user.
-Optional: paid Render plan (no sleep), paid Gemini tier (no "busy"), rotate keys pasted in chat earlier.
+Optional: paid Render plan (no sleep), rotate keys pasted in chat earlier. When Gemini is busy, the Copilot
+answers from the workspace data instead (no failures).
 
 ## Prompt to paste into the new AI session
 

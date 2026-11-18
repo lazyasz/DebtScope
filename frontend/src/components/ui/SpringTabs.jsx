@@ -21,7 +21,7 @@ export default function SpringTabs({
 
   return (
     <div
-      className={`inline-flex items-center p-1 rounded-lg transition-colors ${
+      className={`inline-flex max-w-full overflow-x-auto items-center p-1 rounded-lg transition-colors ${
         dark
           ? 'bg-[#130e24] border border-[#261c47]'
           : 'bg-[#f3f4f8] border border-[#e2e4ea]'
@@ -33,7 +33,7 @@ export default function SpringTabs({
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`relative flex items-center font-semibold tracking-tight rounded-md transition-colors cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7048e8] ${sizeStyles} ${
+            className={`relative flex shrink-0 whitespace-nowrap items-center font-semibold tracking-tight rounded-md transition-colors cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7048e8] ${sizeStyles} ${
               isActive
                 ? dark
                   ? 'text-white'

@@ -59,7 +59,7 @@ export default function DataQuality() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#d3ebb2] text-[#2d3f16] tracking-wide uppercase">
-              Data Governance & MLOps
+              About the model's data
             </span>
             {auditData?.source === 'stored_snapshot' && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#fdf2e7] text-[#855300] border border-[#f3d9b1]">
@@ -68,10 +68,10 @@ export default function DataQuality() {
             )}
           </div>
           <h1 className="text-2xl font-black text-[#161e10] tracking-tight">
-            Data Lineage & Quality Gates
+            Can you trust the defect model?
           </h1>
           <p className="text-xs text-[#585c51]">
-            Checks run by the data pipeline that trains the defect model (Bronze raw → Silver cleaned → Gold features).
+            The defect model learned from 21 years of history in 31 real Apache projects. This page shows the checks that data passed and how accurate the model is. It's the evidence behind every risk score, not your own repository's data.
           </p>
         </div>
 

@@ -11,7 +11,7 @@ const TITLES = {
   '/predictions': 'Risk Predictions',
   '/priorities': 'What to fix first',
   '/hotspots': 'Code Hotspots',
-  '/data-quality': 'Data Quality',
+  '/data-quality': 'About the model',
   '/copilot': 'AI Copilot',
 };
 

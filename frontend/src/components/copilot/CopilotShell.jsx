@@ -174,6 +174,14 @@ export default function CopilotShell() {
           }
         }
       }
+      // Stream closed without an answer or an error (e.g. the server restarted mid-reply)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId && !m.text && !m.error && !m.stagedAction
+            ? { ...m, error: 'The AI didn\'t answer. Please try again.' }
+            : m
+        )
+      );
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>

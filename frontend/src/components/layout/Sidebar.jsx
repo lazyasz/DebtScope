@@ -39,7 +39,7 @@ const sections = [
     title: 'Workspace',
     items: [
       { name: 'Integrations', to: '/integrations', icon: Layers },
-      { name: 'Data Quality', to: '/data-quality', icon: ShieldCheck },
+      { name: 'About the model', to: '/data-quality', icon: ShieldCheck },
     ],
   },
 ];

@@ -340,9 +340,9 @@ class RepoScannerService:
             fname = os.path.basename(fpath)
             fsize = item.get("size", 8000)
             
-            # Attempt to fetch real source code for the top 10 files
+            # Fetch and measure every selected file (size-based estimate only if the download fails)
             ast_metrics = None
-            if idx < 10:
+            if True:
                 try:
                     raw_code_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/{fpath}"
                     code_resp = requests.get(raw_code_url, headers={"Authorization": headers["Authorization"]} if "Authorization" in headers else None, timeout=4.0)

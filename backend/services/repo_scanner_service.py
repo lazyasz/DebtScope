@@ -7,6 +7,7 @@ and registers them in the database for instant visualization across the platform
 """
 
 import os
+import threading
 import re
 import math
 import joblib
@@ -33,6 +34,9 @@ from backend.services.priority_service import PriorityService
 from backend.services.recommendation_service import RecommendationService
 
 
+_model_lock = threading.Lock()
+
+
 class RepoScannerService:
     MODELS_DIR = "ml_engine/models"
     GOLD_FEATURES_PATH = "data/lakehouse/gold/engineering_features.parquet"
@@ -41,14 +45,15 @@ class RepoScannerService:
 
     @classmethod
     def get_defect_model(cls):
-        """Loads and caches the trained real-defect prediction model."""
-        if cls._model_cache is None:
-            model_path = os.path.join(cls.MODELS_DIR, "real_defect_predictor.pkl")
-            if os.path.exists(model_path):
-                try:
-                    cls._model_cache = joblib.load(model_path)
-                except Exception as e:
-                    print(f"[-] Warning: Failed to load real defect model: {e}")
+        """Loads and caches the trained real-defect prediction model (once, even if called concurrently)."""
+        with _model_lock:
+            if cls._model_cache is None:
+                model_path = os.path.join(cls.MODELS_DIR, "real_defect_predictor.pkl")
+                if os.path.exists(model_path):
+                    try:
+                        cls._model_cache = joblib.load(model_path)
+                    except Exception as e:
+                        print(f"[-] Warning: Failed to load real defect model: {e}")
         return cls._model_cache
 
     @classmethod
@@ -74,14 +79,14 @@ class RepoScannerService:
         parts = [p for p in clean.split("/") if p]
 
         if len(parts) >= 2:
-            owner = parts[0]
-            repo_name = parts[1]
+            owner, repo_name = parts[0], parts[1]
         elif len(parts) == 1:
-            owner = "apache"
-            repo_name = parts[0]
+            owner, repo_name = "apache", parts[0]  # 'zookeeper' shorthand for the bundled Apache projects
         else:
-            owner = "pallets"
-            repo_name = "flask"
+            raise ValueError("Enter a GitHub repository, like owner/repo or https://github.com/owner/repo.")
+        # GitHub usernames are letters, digits and hyphens (no dots), so hosts and IPs are rejected here
+        if not (re.fullmatch(r"[A-Za-z0-9-]{1,39}", owner) and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", repo_name)):
+            raise ValueError("That doesn't look like a GitHub repository. Use owner/repo or https://github.com/owner/repo.")
 
         canonical_url = f"https://github.com/{owner}/{repo_name}"
         return owner, repo_name, canonical_url
@@ -247,7 +252,9 @@ class RepoScannerService:
                 forks = meta.get("forks_count", 0)
                 description = meta.get("description") or f"Public GitHub repository {owner}/{repo_name}"
                 lang = meta.get("language") or "Python"
-        except PermissionError:
+            elif resp.status_code == 404:
+                raise ValueError(f"Repository {owner}/{repo_name} wasn't found on GitHub. Check the link, or connect your GitHub account if it's private.")
+        except (PermissionError, ValueError):
             raise
         except Exception as e:
             print(f"[-] GitHub metadata fetch note: {e}")
@@ -317,17 +324,12 @@ class RepoScannerService:
         except Exception as e:
             print(f"[-] GitHub tree fetch note: {e}")
 
-        # Fallback if GitHub API rate limit is hit or network error
         if not file_tree:
-            ext = ".py" if lang.lower() == "python" else (".ts" if "type" in lang.lower() else ".js")
-            file_tree = [
-                {"path": f"src/{repo_name}/app{ext}", "size": 18500},
-                {"path": f"src/{repo_name}/core/engine{ext}", "size": 24200},
-                {"path": f"src/{repo_name}/routes/router{ext}", "size": 15600},
-                {"path": f"src/{repo_name}/auth/token_service{ext}", "size": 12800},
-                {"path": f"src/{repo_name}/models/schema{ext}", "size": 9400},
-                {"path": f"src/{repo_name}/utils/helpers{ext}", "size": 6800},
-            ]
+            # Never invent files: say what went wrong instead, and don't leave an empty repository behind
+            if db.query(SourceFile).filter(SourceFile.repository_id == repo.id).count() == 0:
+                db.delete(repo)
+                db.commit()
+            raise ValueError("Couldn't read any source files from this repository on GitHub (it may be empty, or GitHub is busy). Try again in a minute.")
 
         model_obj = cls.get_defect_model()
         scanned_files = []

@@ -10,16 +10,12 @@ import InteractiveCard from '../components/ui/InteractiveCard';
 import { 
   Activity, 
   Cpu, 
-  Sparkles, 
-  TrendingUp, 
   Sliders, 
   CheckCircle2, 
   ArrowRight, 
-  Layers, 
   Code2, 
   BarChart3,
   Flame,
-  ShieldAlert,
   BrainCircuit
 } from 'lucide-react';
 import ChartTooltip from '../components/ui/ChartTooltip';

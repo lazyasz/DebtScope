@@ -1,7 +1,7 @@
 import React from 'react';
 import { Activity } from 'lucide-react';
 
-export default function LoadingState({ message = 'Synchronizing AST telemetry & predictive models...' }) {
+export default function LoadingState({ message = 'Loading...' }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 select-none animate-fade-in">
       <div className="relative flex items-center justify-center">

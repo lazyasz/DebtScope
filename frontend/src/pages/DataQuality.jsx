@@ -2,17 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   CheckCircle2,
-  XCircle,
   Database,
-  Layers,
   Sparkles,
   RefreshCw,
-  Clock,
   TrendingUp,
-  FileCode,
-  HardDrive,
-  Cpu,
-  BarChart3
+  HardDrive
 } from 'lucide-react';
 import apiClient from '../services/api';
 
@@ -121,14 +115,14 @@ export default function DataQuality() {
 
         <div className="bg-white/90 backdrop-blur-md p-5 rounded-3xl border border-[#d4dece] shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#75786d] uppercase tracking-wider">SZZ Defect Baseline Lift</span>
+            <span className="text-xs font-bold text-[#75786d] uppercase tracking-wider">Better than guessing</span>
             <div className="p-2 rounded-xl bg-[#eef7e0] text-[#43562b]">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-[#43562b]">+35.2%</span>
-            <span className="text-xs font-bold text-[#75786d]">vs Mean Dummy</span>
+            <span className="text-xs font-bold text-[#75786d]">smaller error than always guessing the average</span>
           </div>
           <p className="mt-1 text-[11px] text-[#75786d]">Random Forest R² 0.41 (5-Fold CV)</p>
         </div>
@@ -299,7 +293,7 @@ export default function DataQuality() {
       <div className="bg-white/90 backdrop-blur-md p-6 rounded-3xl border border-[#d4dece] shadow-xs space-y-6">
         <div>
           <h2 className="text-base font-extrabold text-[#161e10]">Empirical ML Benchmark Metrics (Real Outcomes)</h2>
-          <p className="text-xs text-[#75786d]">Honest evaluation against real SZZ defect targets and NASA PROMISE benchmarks.</p>
+          <p className="text-xs text-[#75786d]">Measured against real bug history (SZZ: the standard method that traces each bug fix back to the commit that introduced the bug) and NASA PROMISE benchmarks.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

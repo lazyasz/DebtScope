@@ -7,16 +7,10 @@ import {
   AlertTriangle, 
   ArrowRight, 
   X, 
-  ShieldAlert, 
-  Cpu, 
   Sparkles, 
   Star, 
-  GitFork, 
   FileCode, 
-  ExternalLink,
-  Flame,
-  Activity,
-  Layers
+  ExternalLink
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { scanRepository } from '../../services/api';
@@ -111,7 +105,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
               <GitBranch className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-[#161e10] leading-tight">Live Repository Scanner</h3>
+              <h3 className="text-lg font-bold text-[#161e10] leading-tight">Scan a repository</h3>
               <p className="text-xs text-[#45483e]">Paste a public GitHub link. We'll find the files most likely to cause bugs.</p>
             </div>
           </div>
@@ -172,7 +166,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
           {/* Quick Presets */}
           {!result && (
             <div>
-              <span className="text-[11px] font-bold text-[#75786d] uppercase tracking-wider block mb-2">Preloaded & Live Presets</span>
+              <span className="text-[11px] font-bold text-[#75786d] uppercase tracking-wider block mb-2">Or try one of these</span>
               <div className="flex flex-wrap gap-2">
                 {popularRepos.map((preset) => (
                   <button
@@ -197,7 +191,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
             <div className="p-4 bg-[#ffdad6] border border-[#ffb4ab] rounded-2xl flex items-start gap-3 text-[#93000a] text-xs">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="font-bold block">Scan Encountered an Issue</span>
+                <span className="font-bold block">The scan didn't work</span>
                 <span>{error}</span>
               </div>
             </div>
@@ -343,7 +337,7 @@ export default function ScanRepoModal({ isOpen, onClose, onScanComplete }) {
                     }}
                     className="px-4 py-2 bg-[#43562b] hover:bg-[#2d3f16] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
                   >
-                    <span>Open in 5D Debt Matrix</span>
+                    <span>See what to fix first</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
 import { 
-  Activity, 
   Flame, 
   TrendingDown, 
   Bolt, 
   ArrowRight, 
   RefreshCw, 
   Layers, 
-  Database, 
-  ExternalLink,
   ChevronRight,
-  ShieldCheck,
-  Zap,
   Code2,
   Cpu,
-  Sliders,
-  FileText,
-  GitPullRequest,
   Wand2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -25,10 +17,10 @@ import { useAuth } from '../context/AuthContext';
 import LoadingState from '../components/ui/LoadingState';
 import ErrorState from '../components/ui/ErrorState';
 import ScanRepoModal from '../components/common/ScanRepoModal';
+import RepoList from '../components/common/RepoList';
 import ChartTooltip from '../components/ui/ChartTooltip';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
 import InteractiveCard from '../components/ui/InteractiveCard';
-import TelemetryRadar from '../components/ui/TelemetryRadar';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -47,7 +39,7 @@ export default function Dashboard() {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const navigate = useNavigate();
 
-  if (loading) return <LoadingState message="Connecting to AST telemetry & ML prediction mesh..." />;
+  if (loading) return <LoadingState message="Loading your code health..." />;
   if (error) return <ErrorState message={error} />;
 
   const PALETTE = ['#7048e8', '#5b42a5', '#d97706', '#dc2626', '#059669', '#0ea5e9'];
@@ -101,6 +93,8 @@ export default function Dashboard() {
 
         </div>
       </section>
+
+      <RepoList />
 
       {/* 4 Bento KPI Metric Capsules with Specular Sheen & Tabular Numbers */}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

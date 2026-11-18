@@ -18,14 +18,8 @@ import {
   Bolt, 
   TrendingDown, 
   ArrowRight, 
-  Filter, 
-  Calendar, 
   Code2, 
-  Clock, 
-  Target, 
-  Wand2, 
   Compass, 
-  Sliders,
   Bot
 } from 'lucide-react';
 
@@ -81,7 +75,7 @@ export default function Priorities() {
     setJiraModalOpen(true);
   };
 
-  if (loading) return <LoadingState message="Calculating 5D Business-Aware Prioritization Matrix..." />;
+  if (loading) return <LoadingState message="Ranking your files..." />;
   if (error) return <ErrorState message={error} />;
   if (!data || data.length === 0) {
     return <EmptyState title="Nothing to prioritise yet" message="Scan a repository from the Dashboard and its files will be ranked here." />;

@@ -13,7 +13,7 @@ const API_BASE_URL =
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 5000,
+  timeout: 20000, // the free server can be slow to answer
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,  // send httpOnly session cookie on all requests
 });
@@ -33,13 +33,33 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Turn every failure into a plain message (pages show err.message), and send expired sessions to sign-in
+apiClient.interceptors.response.use(undefined, (err) => {
+  const status = err.response?.status;
+  const detail = err.response?.data?.detail;
+  if (status === 401 && !err.config?.url?.includes('/auth/me') && window.location.pathname !== '/login') {
+    window.location.assign('/login');
+  }
+  if (typeof detail === 'string' && status && status < 500) err.message = detail;
+  else if (status === 404) err.message = "This item wasn't found. It may have been removed.";
+  else if (status >= 500) err.message = 'The server had a problem. Please try again in a minute.';
+  else if (err.code === 'ECONNABORTED') err.message = 'This is taking too long. Please try again.';
+  else if (!err.response) err.message = "Can't reach DebtScope. Check your connection and try again.";
+  return Promise.reject(err);
+});
+
 export async function getModelInfo() {
-  const { data } = await apiClient.get('/api/predictions/model-info');
+  const { data } = await apiClient.get('/api/predictions/model-info', { timeout: 60000 }); // first call may wait for the model to load
   return data;
 }
 
 export async function getDashboardSummary() {
   const { data } = await apiClient.get('/api/metrics/dashboard');
+  return data;
+}
+
+export async function deleteRepository(id) {
+  const { data } = await apiClient.delete(`/api/repositories/${id}`);
   return data;
 }
 

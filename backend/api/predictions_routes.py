@@ -25,11 +25,12 @@ router = APIRouter(prefix="/predictions", tags=["ML Predictions (Member 2 Engine
 @lru_cache(maxsize=1)
 def _model_info() -> dict:
     """Facts about the defect model scans actually use, read from its saved bundle."""
-    import joblib
     from backend.services.repo_scanner_service import RepoScannerService
 
-    path = os.path.join(RepoScannerService.MODELS_DIR, "real_defect_predictor.pkl")
-    bundle = joblib.load(path)
+    # Reuse the scanner's cached copy: loading the 100-tree model twice doubles memory on a small server
+    bundle = RepoScannerService.get_defect_model()
+    if not bundle or "model" not in bundle:
+        raise RuntimeError("defect model file not available")
     model = bundle["model"]
     importances = getattr(model, "feature_importances_", [])
     features = sorted(

@@ -2,8 +2,8 @@ import React from 'react';
 import { Inbox } from 'lucide-react';
 
 export default function EmptyState({ 
-  title = 'No telemetry records indexed', 
-  message = 'There are no active artifacts matching the current filter criteria.', 
+  title = 'Nothing here yet', 
+  message = 'Scan a repository to fill this page.', 
   icon: Icon = Inbox,
   action
 }) {

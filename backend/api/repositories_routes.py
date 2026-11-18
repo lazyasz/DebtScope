@@ -83,6 +83,21 @@ def get_repository(
     return repo
 
 
+@router.delete("/{repo_id}", summary="Remove a scanned repository and all its results")
+def delete_repository(
+    repo_id: int,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db)
+):
+    repo = DataService.get_repository_by_id(db, repo_id, workspace_id=workspace.id)
+    if not repo or getattr(workspace, "is_demo", False):
+        # Only your own workspace's repos; the shared sample workspace is read-only
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found in your workspace")
+    db.delete(repo)  # files, metrics, predictions and scores cascade
+    db.commit()
+    return {"status": "deleted", "id": repo_id}
+
+
 @router.get("/{repo_id}/files", response_model=List[SourceFileResponse])
 def get_repository_files(
     repo_id: int,
@@ -168,6 +183,8 @@ def scan_repository(
         return result
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

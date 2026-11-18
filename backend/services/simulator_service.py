@@ -2,12 +2,8 @@
 What-If simulation (runs the trained defect model) and AI remediation recipes.
 """
 
-from typing import Dict, Any, List, Optional
-import os
+from typing import Dict, Any, Optional
 import math
-import time
-
-_predictor_instance = None
 
 def _predict_faults(churn: float, complexity: float, debt_minutes: float, experience: float, refactorings: float) -> Optional[float]:
     """Runs the trained defect model (the one scans use) on what-if inputs; None if it isn't available."""
@@ -60,13 +56,6 @@ def calculate_what_if_simulation(
     }
     simulated_experience = seniority_map.get(developer_seniority, max(current_experience, 20))
 
-    # Risk tolerance modifier
-    risk_multiplier = {
-        "conservative": 0.85,  # Focus on safety, strict defect dampening
-        "balanced": 1.0,       # Standard balanced triage
-        "aggressive": 1.25     # High speed, maximum debt burn-down
-    }.get(risk_tolerance.lower(), 1.0)
-
     model_faults = _predict_faults(current_churn, current_complexity, current_debt_minutes, current_experience, 1.0)
     model_used = "random_forest" if model_faults is not None else "formula"
     if model_faults is not None:
@@ -107,30 +96,7 @@ def calculate_what_if_simulation(
     budget_hours = refactoring_budget_hours or round(current_debt_minutes / 60.0 * (refactoring_effort_pct / 100.0) * 1.2, 1)
     story_points = refactoring_story_points or max(1, math.ceil(budget_hours / 6.0))
 
-    # Multi-Sprint Projections (Sprint 1 to Sprint 6)
-    projection_curves = []
-    base_debt_hrs = current_debt_minutes / 60.0
     base_defect_prob = min(95.0, baseline_faults * 15.0)
-    base_velocity = 60.0  # Baseline team velocity in SP / sprint
-
-    for sprint_idx in range(1, 7):
-        # Gradual realization over sprints based on effort and risk tolerance
-        decay_progress = min(1.0, (sprint_idx / 4.0) * (effort_effective / 100.0))
-        sprint_debt_hrs = max(0.0, round(base_debt_hrs * (1.0 - decay_progress), 1))
-        sprint_defect_prob = max(5.0, round(base_defect_prob * (1.0 - (fault_reduction_pct / 100.0) * decay_progress), 1))
-        # Velocity recovery: recovering up to +35% sprint capacity
-        velocity_gain_pct = round(35.0 * (effort_effective / 100.0) * (sprint_idx / 6.0) * risk_multiplier, 1)
-        sprint_velocity = round(base_velocity * (1.0 + (velocity_gain_pct / 100.0)), 1)
-        sprint_cumulative_savings = round((total_hours_saved * (sprint_idx / 6.0)) * hourly_rate, 2)
-
-        projection_curves.append({
-            "sprint": f"Sprint {sprint_idx}",
-            "debt_hours": sprint_debt_hrs,
-            "defect_probability_pct": sprint_defect_prob,
-            "team_velocity_sp": sprint_velocity,
-            "velocity_gain_pct": velocity_gain_pct,
-            "cumulative_savings_usd": sprint_cumulative_savings
-        })
 
     # Risk level transition
     def get_risk_label(val: float) -> str:
@@ -138,38 +104,6 @@ def calculate_what_if_simulation(
         if val >= 2.5: return "HIGH"
         if val >= 1.0: return "MEDIUM"
         return "LOW"
-
-    # Jira Package Generation Payload
-    jira_package = {
-        "sprint_name": f"Sprint 49 — Debt Remediation Initiative ({risk_tolerance.capitalize()})",
-        "total_story_points": story_points,
-        "estimated_budget_hours": budget_hours,
-        "projected_roi_usd": dollar_savings,
-        "risk_reduction_pct": fault_reduction_pct,
-        "suggested_tickets": [
-            {
-                "issue_key": "DEBT-101",
-                "summary": f"Refactor high-cyclomatic hotspot ({current_complexity:.1f} complexity)",
-                "story_points": max(1, math.ceil(story_points * 0.5)),
-                "priority": "High",
-                "component": "Core Architecture"
-            },
-            {
-                "issue_key": "DEBT-102",
-                "summary": f"Increase unit & regression test harness to {testCoverage if 'testCoverage' in locals() else test_coverage_pct}%",
-                "story_points": max(1, math.ceil(story_points * 0.3)),
-                "priority": "Medium",
-                "component": "Test Infrastructure"
-            },
-            {
-                "issue_key": "DEBT-103",
-                "summary": "Decouple God Class dependencies and extract domain handlers",
-                "story_points": max(1, math.ceil(story_points * 0.2)),
-                "priority": "High",
-                "component": "Domain Service"
-            }
-        ]
-    }
 
     return {
         "model_used": model_used,
@@ -188,7 +122,6 @@ def calculate_what_if_simulation(
             "debt_hours": round(simulated_debt_minutes / 60.0, 1),
             "complexity": round(simulated_complexity, 1),
             "defect_probability_pct": max(5.0, round(base_defect_prob * (1.0 - (fault_reduction_pct / 100.0)), 1)),
-            "payback_velocity": "1.8 Sprints" if fault_reduction_pct > 50 else "3.2 Sprints",
             "recommendation": f"Allocating {budget_hours}h ({story_points} SP) under a {risk_tolerance} strategy averts {faults_prevented} projected defects and saves ${dollar_savings:,.2f}."
         },
         "impact": {
@@ -202,8 +135,6 @@ def calculate_what_if_simulation(
             "risk_tolerance": risk_tolerance,
             "return_on_investment_multiple": round(max(1.0, (dollar_savings / max(100.0, (budget_hours * hourly_rate * 0.4)))), 1)
         },
-        "projection_curves": projection_curves,
-        "jira_package": jira_package
     }
 
 

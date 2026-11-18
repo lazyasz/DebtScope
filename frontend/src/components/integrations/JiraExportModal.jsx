@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createJiraIssue, bulkExportJira, getProviderResources } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { Layers, CheckCircle2, ExternalLink, X, Sparkles, AlertCircle } from 'lucide-react';
+import { Layers, CheckCircle2, ExternalLink, X, AlertCircle } from 'lucide-react';
 
 export default function JiraExportModal({ isOpen, onClose, item, component, isBulk = false, components = [] }) {
   const targetComponent = component || item;

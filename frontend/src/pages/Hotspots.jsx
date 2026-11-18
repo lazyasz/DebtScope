@@ -12,17 +12,12 @@ import InteractiveCard from '../components/ui/InteractiveCard';
 import SpringTabs from '../components/ui/SpringTabs';
 import { 
   Flame, 
-  RefreshCw, 
   Sparkles, 
   Layers, 
   Code2, 
   ArrowRight, 
   GitBranch, 
   AlertTriangle, 
-  SlidersHorizontal,
-  ChevronRight,
-  Zap,
-  Bot,
   Search
 } from 'lucide-react';
 

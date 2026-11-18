@@ -51,6 +51,11 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # 5. Load the defect model in the background so the first page that needs it isn't slow
+    import threading
+    from backend.services.repo_scanner_service import RepoScannerService
+    threading.Thread(target=RepoScannerService.get_defect_model, daemon=True).start()
+
     yield
 
 

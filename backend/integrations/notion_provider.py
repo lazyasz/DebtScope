@@ -176,7 +176,39 @@ class NotionProvider(IntegrationProvider):
             }
             for d in resp.json().get("results", [])
         ]
-        return {"databases": dbs, "total_count": len(dbs), "source": "live_notion_api"}
+        # Pages the user shared: DebtScope can create its own database inside one of them
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            pr = await client.post(
+                "https://api.notion.com/v1/search",
+                json={"filter": {"property": "object", "value": "page"}, "page_size": 50},
+                headers={"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"},
+            )
+        pages = []
+        for p in (pr.json().get("results", []) if pr.status_code == 200 else []):
+            if p.get("parent", {}).get("type") == "database_id":
+                continue  # rows of a database, not standalone pages
+            title = next(("".join(t.get("plain_text", "") for t in v.get("title", []))
+                          for v in p.get("properties", {}).values() if v.get("type") == "title"), "") or "Untitled page"
+            pages.append({"id": p["id"], "title": title})
+        return {"databases": dbs, "pages": pages, "total_count": len(dbs), "source": "live_notion_api"}
+
+    async def create_backlog_database(self, connection: IntegrationConnection, page_id: str) -> Dict[str, Any]:
+        """Creates a 'DebtScope backlog' database inside a page the user shared with DebtScope."""
+        token = TokenSecurity.decrypt(connection.access_token_enc)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(
+                "https://api.notion.com/v1/databases",
+                headers={"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"},
+                json={
+                    "parent": {"type": "page_id", "page_id": page_id},
+                    "title": [{"type": "text", "text": {"content": "DebtScope backlog"}}],
+                    "properties": {"Name": {"title": {}}},
+                },
+            )
+        if res.status_code != 200:
+            raise ValueError(res.json().get("message", "Notion couldn't create the database."))
+        d = res.json()
+        return {"id": d["id"], "title": "DebtScope backlog", "url": d.get("url")}
 
     async def create_backlog_pages(self, connection: IntegrationConnection, database_id: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Adds one page per file to a database in the user's own Notion; fills only the title column so any database works."""

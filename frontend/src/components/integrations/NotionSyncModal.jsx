@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { syncNotion, getProviderResources } from '../../services/api';
+import { syncNotion, getProviderResources, createNotionDatabase } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Database, CheckCircle2, AlertCircle, ExternalLink, X } from 'lucide-react';
 
@@ -11,6 +11,9 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
   const [databases, setDatabases] = useState(null); // null = loading
   const [dbError, setDbError] = useState(null);
   const [databaseId, setDatabaseId] = useState('');
+  const [pages, setPages] = useState([]);
+  const [pageId, setPageId] = useState('');
+  const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -20,7 +23,10 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
     getProviderResources('notion')
       .then((r) => {
         const list = r.connected ? r.databases || [] : [];
-        setDbError(!r.connected ? null : list.length ? null : r.error || 'No databases are shared with DebtScope yet. In Notion, open a database → ••• → Connections → add DebtScope.');
+        const shared = r.connected ? r.pages || [] : [];
+        setPages(shared);
+        if (shared.length) setPageId((p) => p || shared[0].id);
+        setDbError(!r.connected || list.length || shared.length ? null : r.error || 'Nothing is shared with DebtScope yet. Disconnect Notion on the Integrations page, connect again and pick a page to share.');
         setDatabases(r.connected ? list : []);
         if (list.length) setDatabaseId((d) => d || list[0].id);
       })
@@ -29,6 +35,22 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
 
   if (!isOpen) return null;
   const connected = databases && databases.length > 0;
+
+  // Notion's special databases (e.g. People) refuse new rows, so let users make a normal one in a shared page
+  const createDatabase = async () => {
+    setCreating(true);
+    try {
+      const d = await createNotionDatabase(pageId);
+      setDatabases((list) => [d, ...(list || [])]);
+      setDatabaseId(d.id);
+      setDbError(null);
+      notify('Created "DebtScope backlog" in your Notion.');
+    } catch (err) {
+      setDbError(err?.response?.data?.detail || "Couldn't create the database.");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const send = async () => {
     setLoading(true);
@@ -106,21 +128,36 @@ export default function NotionSyncModal({ isOpen, onClose, items = [], component
                   <p className="text-[#75786d]">Loading your Notion databases…</p>
                 ) : dbError ? (
                   <p className="text-[#855300]">{dbError}</p>
-                ) : !connected ? (
+                ) : !connected && pages.length === 0 ? (
                   <p className="text-[#855300]">
                     Notion isn't connected, so this will only be simulated. <Link to="/integrations" onClick={onClose} className="font-semibold underline">Connect Notion</Link> to add real pages.
                   </p>
                 ) : (
-                  <select value={databaseId} onChange={(e) => setDatabaseId(e.target.value)} className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl">
-                    {databases.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-                  </select>
+                  connected && (
+                    <select value={databaseId} onChange={(e) => setDatabaseId(e.target.value)} className="w-full px-3.5 py-2 bg-[#f8faf6] border border-[#c5c8ba] rounded-xl">
+                      {databases.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+                    </select>
+                  )
+                )}
+                {databases !== null && pages.length > 0 && (
+                  <div className="mt-3 p-3 rounded-2xl border border-[#e5ebe0] bg-[#f8faf6] space-y-2">
+                    <p className="text-[#45483e]">{connected ? 'Or create a new database' : 'No database yet. Create one'} in a page you shared:</p>
+                    <div className="flex gap-2">
+                      <select value={pageId} onChange={(e) => setPageId(e.target.value)} className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-[#c5c8ba] rounded-xl">
+                        {pages.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                      </select>
+                      <button onClick={createDatabase} disabled={creating || !pageId} className="px-3 py-1.5 rounded-xl border border-[#c5c8ba] font-semibold text-[#2d3f16] hover:bg-white cursor-pointer disabled:opacity-50">
+                        {creating ? 'Creating…' : 'Create "DebtScope backlog"'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button onClick={onClose} className="px-4 py-2 bg-[#edf1e8] hover:bg-[#dde5d7] text-[#2d3f16] font-bold rounded-xl transition cursor-pointer">Cancel</button>
                 <button
                   onClick={send}
-                  disabled={loading || databases === null || !!dbError || targets.length === 0}
+                  disabled={loading || databases === null || !!dbError || targets.length === 0 || (!connected && pages.length > 0)}
                   className="px-5 py-2 bg-[#43562b] hover:bg-[#2d3f16] text-white font-bold rounded-xl shadow-md transition cursor-pointer disabled:opacity-50"
                 >
                   {loading ? 'Sending…' : connected ? `Add ${targets.length} page${targets.length === 1 ? '' : 's'}` : 'Simulate'}

@@ -314,6 +314,30 @@ async def sync_to_notion_database(
     return await sync_backlog_to_notion(components_dict, payload.database_id)
 
 
+class NotionDatabaseRequest(BaseModel):
+    page_id: str = Field(..., description="A page the user shared with DebtScope")
+
+
+@router.post("/notion/create-database", summary="Create a DebtScope backlog database in the user's Notion")
+async def create_notion_backlog_database(
+    payload: NotionDatabaseRequest,
+    user: User = Depends(session_user),
+    db: Session = Depends(get_db),
+):
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.user_id == user.id,
+        IntegrationConnection.provider == "notion",
+        IntegrationConnection.status == "CONNECTED",
+        IntegrationConnection.access_token_enc.isnot(None),
+    ).first()
+    if not conn:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connect Notion first.")
+    try:
+        return await PROVIDERS["notion"].create_backlog_database(conn, payload.page_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/notion/create-report", summary="Create Executive Audit Report in Notion")
 async def create_audit_report_in_notion(
     payload: NotionAuditReportRequest,

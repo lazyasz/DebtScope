@@ -77,6 +77,7 @@ EXPLICIT_PUBLIC_ALLOWLIST: Dict[str, str] = {
     "/integrations/{provider}/disconnect": "Disconnects external integration provider.",
     "/integrations/jira/create-issue": "Direct Jira issue creation endpoint.",
     "/integrations/jira/bulk-export": "Direct sprint backlog export to Jira.",
+    "/integrations/notion/create-database": "Creates a database in the user's own connected Notion (user-scoped).",
     "/integrations/notion/sync": "Direct backlog sync to Notion database.",
     "/integrations/notion/ingest-criticality": "Ingests service criticality rules from Notion.",
 }
@@ -103,6 +104,7 @@ USER_SCOPE_ROUTES_JUSTIFICATIONS: Dict[str, str] = {
     "/integrations/jira/create-issue": "Creates a ticket in the signed-in user's own connected Jira.",
     "/integrations/jira/bulk-export": "Creates tickets in the signed-in user's own connected Jira.",
     "/integrations/notion/sync": "Adds pages to a database in the signed-in user's own connected Notion.",
+    "/integrations/notion/create-database": "Creates a database in the signed-in user's own connected Notion.",
 }
 
 

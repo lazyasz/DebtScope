@@ -140,7 +140,7 @@ export default function Dashboard() {
                 Quick Wins
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
-                <AnimatedCounter value={kpis.quick_wins ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">files</span>
+                <AnimatedCounter value={kpis.quick_wins ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">{kpis.quick_wins === 1 ? 'file' : 'files'}</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#f0ecfc] text-[#5b42a5]">
@@ -196,7 +196,7 @@ export default function Dashboard() {
                 Complex Files
               </span>
               <div className="text-3xl font-bold text-[#0f1015] tracking-tight mt-1.5 font-mono">
-                <AnimatedCounter value={kpis.complex_files ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">files</span>
+                <AnimatedCounter value={kpis.complex_files ?? 0} /> <span className="text-xs font-normal text-[#525866] font-sans">{kpis.complex_files === 1 ? 'file' : 'files'}</span>
               </div>
             </div>
             <span className="p-2 rounded-lg bg-[#fef2f2] text-[#dc2626]">

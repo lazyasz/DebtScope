@@ -40,6 +40,8 @@ cp .env.example .env      # then fill in values (see below)
   - GitHub: GitHub asks which account to use; lists the user's repos; scans with their token
     (private repos need their own connection; the server token is refused for private repos).
   - Jira: lists the user's projects; Export to Jira creates real tickets (tested: KAN-4…KAN-10).
+    The Atlassian app "DebtScope Platform" is set to Sharing with anyone, so any user can connect.
+    Its "stores personal data" answer should be No (DebtScope stores site IDs, not user account IDs).
   - Notion: lists the user's databases; Send to Notion adds pages. Needs a normal database shared
     with the DebtScope connection (Notion's special "People" database refuses new rows).
 - Docs: `docs/PRD.md` is the source of truth for users, flows, pages, APIs and status.

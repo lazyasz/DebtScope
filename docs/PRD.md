@@ -132,7 +132,7 @@ Random Forest regressor, 100 trees, 14 features, target = fault count, trained 1
 | Gemini API key | AI Copilot | ✅ Live (new key "DebtScope Copilot", Nov 17) | Render env + `.env` |
 | GitHub OAuth app | Each user connects their own GitHub (GitHub shows its account chooser), lists their repos; private repos only with the user's own connection | ✅ Live (tested) | Render env `GITHUB_CLIENT_ID/SECRET` |
 | Notion OAuth app | Each user connects their own Notion, lists their databases | ✅ Live (tested) | Render env `NOTION_CLIENT_ID/SECRET` |
-| Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ✅ Live (tested on dhruvsakhare2006.atlassian.net, project KAN) | Render env `JIRA_CLIENT_ID/SECRET` |
+| Jira OAuth app (Atlassian 3LO) | Each user connects their own Jira site, lists their projects | ✅ Live for any user (Atlassian app distribution: Sharing with anyone, Nov 18; tested on dhruvsakhare2006.atlassian.net, project KAN) | Render env `JIRA_CLIENT_ID/SECRET` |
 | Render | Hosting + Postgres | ✅ Live (free tier: sleeps after ~15 min idle) | — |
 
 ---

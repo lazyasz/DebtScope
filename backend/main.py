@@ -187,6 +187,8 @@ candidate_paths = [
     "/app/frontend/dist",
 ]
 frontend_dist = next((p for p in candidate_paths if os.path.exists(p)), None)
+if frontend_dist:
+    frontend_dist = os.path.realpath(frontend_dist)
 
 if frontend_dist and os.path.exists(frontend_dist):
     assets_dir = os.path.join(frontend_dist, "assets")
@@ -199,13 +201,15 @@ if frontend_dist and os.path.exists(frontend_dist):
         if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("redoc"):
             raise HTTPException(status_code=404, detail="Not Found")
         
-        file_path = os.path.join(frontend_dist, full_path)
-        if os.path.isfile(file_path):
+        file_path = os.path.realpath(os.path.join(frontend_dist, full_path))
+        # Only serve files inside the build folder (blocks ../ path tricks)
+        if file_path.startswith(frontend_dist + os.sep) and os.path.isfile(file_path) and not file_path.endswith("index.html"):
             return FileResponse(file_path)
-        
+
         index_html = os.path.join(frontend_dist, "index.html")
         if os.path.isfile(index_html):
-            return FileResponse(index_html)
+            # Never cache the page shell: after a deploy it must point at the new asset files
+            return FileResponse(index_html, headers={"Cache-Control": "no-cache"})
         raise HTTPException(status_code=404, detail="Frontend build not found")
 
 

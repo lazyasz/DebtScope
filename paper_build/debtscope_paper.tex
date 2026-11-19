@@ -1,0 +1,414 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{newtxtext,newtxmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{textcomp}
+
+\begin{document}
+
+\title{DebtScope: Predictive Engineering Intelligence for Technical Debt Prioritization}
+
+\author{
+\IEEEauthorblockN{Adesh Patankar}
+\IEEEauthorblockA{\textit{Department of Computer} \\
+\textit{Science and Engineering}\\
+\textit{MIT ADT University}\\
+Pune, Maharashtra, India \\
+{\scriptsize\texttt{adeshpatankar0512@gmail.com}}}
+\and
+\IEEEauthorblockN{Dhruv Sakhare}
+\IEEEauthorblockA{\textit{Department of Computer} \\
+\textit{Science and Engineering}\\
+\textit{MIT ADT University}\\
+Pune, Maharashtra, India \\
+{\scriptsize\texttt{dhruvsakhare2006@gmail.com}}}
+\and
+\IEEEauthorblockN{Vaishnavi Pulaparthi}
+\IEEEauthorblockA{\textit{Department of Computer} \\
+\textit{Science and Engineering}\\
+\textit{MIT ADT University}\\
+Pune, Maharashtra, India \\
+{\scriptsize\texttt{vaishupulaparthi1409@gmail.com}}}
+\and
+\IEEEauthorblockN{Jiya Bhavsar}
+\IEEEauthorblockA{\textit{Department of Computer} \\
+\textit{Science and Engineering}\\
+\textit{MIT ADT University}\\
+Pune, Maharashtra, India \\
+{\scriptsize\texttt{jiyabhavsar2106@gmail.com}}}
+}
+
+\maketitle
+
+\begin{abstract}
+Software teams usually know that their code carries technical debt, but they rarely agree on which part to repair first. We present DebtScope, a deployed web platform that scans a team's GitHub repository, measures every source file, predicts relative defect risk with a model trained on real project history, combines that risk with business impact, urgency, maintenance cost and debt age, adjusts for remediation effort, and returns a ranked and explained list. The defect model is a Random Forest regressor trained on the Technical Debt Dataset (31 Apache projects) after a Bronze--Silver--Gold pipeline that yields 1,037,222 file-level rows and passes 12 of 12 quality checks. On 58,267 held-out samples it reached $R^2=0.413$ (5-fold cross-validated $R^2=0.398\pm0.011$) and a mean absolute error of 4.74 faults, 35.2\% below a mean-prediction baseline. To test whether the ranking anticipates future defects, we ran a temporal backtest on six open-source repositories in three languages, computing features at a cutoff 18 months before the latest commit and counting bug-fixing commits in the following 12 months (372 files, 108 future fixes). The pooled ranking reached AUC 0.791 and Spearman $\rho=0.365$. It was clearly better than random ordering (paired $\Delta$AUC $=+0.300$, 95\% bootstrap interval $[0.198, 0.395]$), but its advantage over lines-of-code and churn rankings ($\Delta$AUC $=+0.021$ and $+0.027$) was not distinguishable from zero. A tool-grounded AI assistant passed all 58 scenarios of a self-authored benchmark covering explanation, tenant isolation and prompt-injection defence. The study contributes a measured account of what a learned, explainable prioritization adds and does not add over strong simple baselines; it does not claim a new defect-prediction algorithm.
+\end{abstract}
+
+\begin{IEEEkeywords}
+technical debt; software defect prediction; prioritization; Random Forest; SZZ; temporal backtest; mining software repositories; grounded language models
+\end{IEEEkeywords}
+
+\section{Introduction}
+Technical debt describes code that works today but makes future change slower and riskier \cite{cunningham,kruchten}. Static analysers can list thousands of issues and estimate remediation time \cite{letouzey}, and surveys of practitioners report that the difficult step is not finding debt but deciding what to do about it \cite{ernst}. A rarely changed script with high complexity may cost little, while a moderately complex file that changes every week and handles payments may cause repeated incidents. A useful prioritization therefore has to join measured code properties, change history, an estimate of future defects and the importance of the code to the organisation.
+
+This raises a practical question: when such signals are combined into one score for a real repository, does the resulting order anticipate where defects will appear, and how does it compare with the simple size and churn rankings that the defect-prediction literature has repeatedly found hard to beat \cite{nagappan,hall,lessmann}? The question matters because a prioritization tool is only useful if its order is at least as good as what a team could obtain from file size or commit counts alone, and if it can explain why a file is ranked where it is.
+
+DebtScope is a research and engineering project that implements this pipeline end to end. Any user signs in with a Google account, receives a private workspace, connects their own GitHub, Notion and Jira accounts, scans public or private repositories, and receives ranked files with factor-by-factor explanations, a what-if simulator driven by the trained model, and an assistant whose answers are drawn from the user's own scan data.
+
+The contributions are: (1) a reproducible data pipeline and defect model trained on real SZZ-labelled history, with its accuracy reported against a baseline; (2) a transparent five-dimension priority model with explicit handling of missing business data; (3) a temporal backtest with paired bootstrap comparisons against simple baselines, reported whether or not the comparison favours DebtScope; and (4) a deployed multi-tenant service whose assistant is grounded in tool calls and evaluated for isolation and prompt-injection resistance. The paper does not claim a novel learning algorithm, calibrated absolute defect probabilities, or demonstrated reductions in production incidents.
+
+\section{Related Work}
+The debt metaphor was introduced by Cunningham \cite{cunningham} and later developed into a research area covering identification, measurement and management \cite{kruchten,li}. Li \textit{et al.} mapped 94 studies and found prioritization to be among the least supported management activities \cite{li}. The SQALE method converts rule violations into remediation time \cite{letouzey}, but remediation time alone does not indicate where defects are likely.
+
+Defect prediction is an established field. McCabe's cyclomatic complexity remains a common size-related metric \cite{mccabe}. Nagappan and Ball showed that relative churn measures predict defect density \cite{nagappan}, Menzies \textit{et al.} showed that simple learners on static attributes form useful predictors on the NASA data \cite{menzies}, and Lessmann \textit{et al.} benchmarked 22 classifiers and found many differences not statistically significant \cite{lessmann}. Hall \textit{et al.} reviewed 208 studies and found that models using process metrics often perform well \cite{hall}, and Kamei \textit{et al.} moved prediction to individual changes \cite{kamei}. Random Forests \cite{breiman} are a strong general-purpose learner for this tabular setting. Defect labels are commonly obtained with the SZZ algorithm \cite{szz}, and the Technical Debt Dataset packages commits, SonarQube analyses, Jira issues and SZZ links for 31 Apache projects \cite{tdd}. DebtScope uses these established components; its contribution concerns their integration and the evaluation of the resulting ranking.
+
+Behavioural code analysis combines complexity with change frequency to locate hotspots \cite{tornhill}, and refactoring catalogues describe how to address the smells that such analyses reveal \cite{fowler}. DebtScope's value-versus-effort quadrants follow the same idea.
+
+Large language models can be made more verifiable when they retrieve evidence \cite{rag} or interleave reasoning with tool calls \cite{react}, while the OWASP list for LLM applications identifies prompt injection and excessive agency as leading risks \cite{owasp}. DebtScope's assistant follows the tool-grounding pattern with server-side tenant scoping; we evaluate the pattern on a finite benchmark rather than claim general robustness.
+
+\section{System Under Study}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figs/fig1_pipeline.pdf}
+\caption{DebtScope's offline training path (top) and per-workspace scoring path (bottom). The trained model bundle feeds the technical-risk dimension of the online score.}
+\label{fig:pipeline}
+\end{figure*}
+
+The evaluated baseline is commit \texttt{42e8d74} of the public repository. The system is a FastAPI service with SQLAlchemy models and a React single-page interface served by the same process, deployed as one Docker service on Render with a managed PostgreSQL database; local development uses SQLite. Fig.~\ref{fig:pipeline} shows the two paths.
+
+\textit{Training path.} The Bronze layer is an exact Parquet copy of the dataset's ten SQLite tables (2,933,680 rows, 132.8\,MB). The Silver layer removes duplicates, normalises types and timestamps, and joins SonarQube and SZZ data into nine relational tables with 52,428 validated defect links. The Gold layer is a feature store of 1,037,222 file-level rows covering 1,854 developers, guarded by twelve quality checks for null keys, duplicate commits, negative churn and target leakage \cite{lakehouse}. Each row has fourteen features (lines added and removed, churn, estimated lines of code, language and test flags, code smells, remediation minutes, blocker/critical/major/minor issue counts, refactorings, and author experience in prior commits) and the number of faults later attributed to the file.
+
+\textit{Scoring path.} A scan accepts an \texttt{owner/repository} identifier that is validated strictly; internal addresses and malformed inputs are rejected. The repository is read through the GitHub REST API with the user's own OAuth token, so private repositories are only visible to their owners. Up to 25 source files are selected by significance, and each is measured for cyclomatic complexity, nesting, long functions, duplication and smells; Git history supplies churn. The trained model predicts a fault count, which a logistic mapping converts to a relative risk between 0 and 100 that the interface labels as uncalibrated.
+
+\textit{Priority model.} Technical risk averages static and predicted risk, $TR = 0.5\,TR_{static} + 0.5\,TR_{ml}$. Business impact combines business, customer and module criticality, $BI = 0.5\,BC + 0.35\,CI + 0.15\,MC$, taken from a service-tier table in the user's Notion workspace when connected. The base score is
+\begin{equation}
+PS_{base} = 0.35\,TR + 0.30\,BI + 0.15\,U + 0.10\,M + 0.10\,Age,
+\label{eq:base}
+\end{equation}
+where $U$ is urgency, $M$ maintenance cost and $Age$ debt age normalised to 100 at one year. The final score rewards low effort,
+\begin{equation}
+PS_{final} = 0.85\,PS_{base} + 0.15\,(100 - Effort).
+\label{eq:final}
+\end{equation}
+When a dimension has no data it is removed and the remaining weights are re-normalised; the interface states the coverage, for example ``3 of 5 dimensions --- technical-only''. Files are labelled critical ($\geq 80$), high, medium or low and placed in value-versus-effort quadrants.
+
+\textit{Implementation.} The interface is a React single-page application built with Vite and served by the API process, so the whole system runs as one container. The backend exposes a REST API, streams assistant answers with server-sent events, and stores data through SQLAlchemy. Sign-in uses the OAuth 2.0 authorization-code flow with Google \cite{oauth}; the backend creates a user and a personal workspace on first sign-in and issues a signed, HTTP-only session cookie. Every data request resolves the workspace from the session, so a browser cannot choose another user's workspace. GitHub, Notion and Atlassian connections use the same flow with a random state value checked on return to prevent cross-site request forgery, and Atlassian tokens, which expire after one hour, are refreshed automatically. The trained model is loaded once in a background thread at start-up so that the first scan does not wait for it.
+
+\textit{Measurement during a scan.} Repository files are classified as source, test, documentation, build or generated; vendored and minified files and directories such as \texttt{node\_modules} are excluded. Selected files are ordered by significance, favouring core modules and larger files, and the 25 most significant are downloaded. For each, a lexical analyser counts lines of code and decision points, giving an approximation of McCabe's complexity summed over the file \cite{mccabe}; nesting depth is measured for deeply indented blocks; smells such as very long files, deeply nested code and TODO/FIXME markers are flagged \cite{fowler}; and duplication is estimated from repeated normalised lines. These measurements, together with churn from the commit history, feed both the defect model and the priority engine. A scan of 25 files completes in about 15 seconds. If GitHub cannot be read, the scan fails with a clear message and no record is kept, so no placeholder values can enter a ranking.
+
+\textit{Assistant and integrations.} The assistant uses Google Gemini with function calling. Its tools (priorities, score explanation, hotspots, file detail, what-if and refactor proposals) run against the signed-in user's workspace, which is fixed by the server session rather than by model arguments. Write actions such as creating Jira tickets are staged and require explicit user confirmation. When the language model is unavailable, the service answers from the same tools without it and says so. Integration tokens are encrypted at rest and never sent to the browser.
+
+\section{Research Questions}
+\textbf{RQ1.} How accurately does the Random Forest predict file-level fault counts on held-out Technical Debt Dataset rows, relative to a mean baseline, and which features drive it?
+
+\textbf{RQ2.} When computed only from information available at a past cutoff, does DebtScope's ranking order files by future bug-fixing activity better than random ordering and than lines-of-code, churn and combined rankings?
+
+\textbf{RQ3.} Are the backtest conclusions stable when the repository contributing most defects, or any single repository, is removed?
+
+\textbf{RQ4.} Does the tool-grounded assistant explain scores consistently with the stored data, refuse cross-tenant requests, and resist prompt injection on a finite scenario set?
+
+\textbf{RQ5.} What does the ranking look like on real repositories scanned through the deployed service, and what response times does the deployed service exhibit for its main operations?
+
+\section{Methods}
+\subsection{Model training and evaluation}
+Because zero-fault rows dominate the Gold layer, the training sample contains every row with at least one recorded fault plus 100,000 randomly drawn zero-fault rows (seed 42), giving 291,333 rows. These were split randomly 80/20 into 233,066 training and 58,267 test rows. The regressor uses scikit-learn \cite{sklearn} with 100 trees, maximum depth 12 and at least five samples per leaf. We report mean absolute error (MAE), root mean squared error (RMSE) and $R^2$ against a regressor that always predicts the training mean, and 5-fold cross-validated $R^2$ on the training portion. Feature importance is the mean decrease in impurity. For comparison with prior work, a Random Forest classifier with the same family of settings was also evaluated on the public NASA JM1 and PC1 data \cite{menzies} with a stratified 80/20 split.
+
+\subsection{Temporal backtest protocol}
+Six repositories were chosen to span three languages and to include projects outside the training data: \texttt{pallets/flask} and \texttt{psf/requests} (Python), \texttt{expressjs/express} and \texttt{fastify/fastify} (JavaScript), and \texttt{google/gson} and \texttt{square/javapoet} (Java). For each, the cutoff is 18 months before the latest commit on the default branch and the forward window is the following 12 months. All features --- lines of code, complexity, churn and commit frequency --- were extracted from the file contents at the cutoff commit and from history up to the cutoff timestamp, so no input was taken from the current head.
+
+The target is the number of bug-fixing commits touching each source file in the forward window. Bug fixes were identified by keywords in commit messages (\textit{fix, bug, patch, issue, resolve, defect, error, crash}), and only files classified as source code were counted. DebtScope was compared with four baselines: lines of code, churn, an equal-weight average of the rank-normalised lines-of-code and churn values, and random order. DebtScope was scored in technical-only mode, since no business data exists for these projects, and without file-path heuristics, so that the ranking depends only on measured code and history.
+
+\subsection{Assistant and security evaluation}
+The assistant benchmark contains 58 scenarios in six categories (Table~\ref{tab:copilot}). Each scenario specifies a query, the expected tool and checks on the answer. The recorded benchmark run executed the scenarios against the deterministic grounded adapter, that is, the same tool layer without the language model, so it tests tool dispatch, grounding and refusal logic rather than the behaviour of a particular hosted model. Security checks on the deployed service covered unauthenticated access, cross-workspace requests, private-repository access without the owner's token, internal-address scans, path traversal, OAuth state mismatch, token storage and unconfirmed write actions. The backend test suite contains 201 automated tests.
+
+\subsection{Worked example and service measurements}
+To illustrate the output, two public repositories, \texttt{psf/requests} and \texttt{pallets/flask}, were scanned into a fresh workspace through the deployed service (50 source files in total), and the ten highest-priority files were recorded with their measured and predicted values. Response times were measured from a browser against the deployment while the server was warm.
+
+\subsection{Measures and analysis}
+For the backtest we report Spearman's $\rho$ between score and future fix count, AUC-ROC for distinguishing files with at least one future fix, and precision in the top 10\% of files. Repositories differ greatly in size and defect rate, so pooled metrics are computed on within-repository percentile ranks. Uncertainty is given by 95\% percentile intervals from 1,000 bootstrap resamples \cite{efron}. Differences between DebtScope and each baseline are computed as paired bootstrap differences on identical resampled files; DebtScope is described as better than a baseline only when the interval of the difference excludes zero. Repositories with fewer than 30 forward bug fixes are reported but not interpreted individually.
+
+\section{Results}
+\subsection{Defect model accuracy (RQ1)}
+Table~\ref{tab:model} and Fig.~\ref{fig:error} summarise the regressor. It reduced MAE from 7.310 to 4.739 faults (35.2\%) and RMSE from 20.477 to 15.685, and explained 41.3\% of the variance on the test rows. Cross-validated $R^2$ was $0.398\pm0.011$, so the result is stable across folds of the training data. Fig.~\ref{fig:importance} shows that process signals dominate: author experience accounts for 42.2\% of the impurity decrease and refactoring count for 20.1\%, followed by size (10.7\%) and language (7.7\%). SonarQube issue counts received no importance. On the NASA benchmarks the classifier reached AUC 0.733 on JM1 (10,885 modules) and 0.875 on PC1 (1,109 modules), against about 0.5 for a stratified dummy classifier, which is in the range reported in prior work \cite{menzies,lessmann}.
+
+\begin{table}[t]
+\caption{Data pipeline and defect model on the Technical Debt Dataset}
+\label{tab:model}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Measure & Mean baseline & Random Forest \\
+\midrule
+MAE (faults) & 7.310 & 4.739 \\
+RMSE (faults) & 20.477 & 15.685 \\
+$R^2$ (test) & 0.000 & 0.413 \\
+$R^2$ (5-fold CV) & --- & $0.398 \pm 0.011$ \\
+Train / test rows & \multicolumn{2}{r}{233,066 / 58,267} \\
+\midrule
+Bronze / Gold rows & \multicolumn{2}{r}{2,933,680 / 1,037,222} \\
+SZZ links; quality checks & \multicolumn{2}{r}{52,428; 12 of 12 pass} \\
+NASA JM1 / PC1 AUC & \multicolumn{2}{r}{0.733 / 0.875} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/fig6_error.pdf}
+\caption{Mean absolute and root mean squared error of the Random Forest and the mean baseline on 58,267 held-out rows.}
+\label{fig:error}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/fig2_importance.pdf}
+\caption{Feature importance of the trained regressor (top eight of fourteen features; mean decrease in impurity).}
+\label{fig:importance}
+\end{figure}
+
+\subsection{Temporal backtest (RQ2)}
+Table~\ref{tab:backtest} lists the six repositories. Across 372 source files, 57 received at least one of 108 forward bug fixes. Only \texttt{fastify/fastify} had at least 30 fixes, so the remaining repositories are reported for transparency only.
+
+\begin{table}[t]
+\caption{Temporal backtest by repository (DebtScope vs.\ lines of code); * fewer than 30 forward fixes, not interpreted alone}
+\label{tab:backtest}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Repository & Files & Fixes & $\rho$ DS & $\rho$ LOC & AUC DS & AUC LOC \\
+\midrule
+flask* & 53 & 11 & 0.411 & 0.490 & 0.872 & 0.943 \\
+requests* & 30 & 15 & 0.385 & 0.002 & 0.706 & 0.483 \\
+express* & 83 & 5 & 0.272 & 0.274 & 0.919 & 0.923 \\
+fastify & 63 & 65 & 0.669 & 0.661 & 0.900 & 0.886 \\
+gson* & 126 & 11 & 0.308 & 0.340 & 0.829 & 0.863 \\
+javapoet* & 17 & 1 & 0.102 & 0.204 & 0.625 & 0.750 \\
+\midrule
+Pooled & 372 & 108 & 0.365 & 0.340 & 0.791 & 0.769 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Fig.~\ref{fig:pooled} shows the pooled results with 95\% intervals. DebtScope reached AUC 0.791 $[0.735, 0.842]$ and $\rho=0.365$ $[0.283, 0.431]$; lines of code reached 0.769 and 0.340, churn 0.764 and 0.336, the combined baseline 0.773 and 0.347, and random order 0.491 and $-0.006$. Precision in the top 10\% was 42.1\% for DebtScope, lines of code and churn, 47.4\% for the combined baseline and 10.5\% for random order.
+
+The paired differences in Fig.~\ref{fig:paired} separate two conclusions. Against random order, DebtScope's advantage is clear: $\Delta$AUC $=+0.300$ $[0.198, 0.395]$, $\Delta\rho=+0.370$ $[0.237, 0.489]$ and $\Delta$P@10\% $=+31.6$ points $[13.2, 50.0]$. Against lines of code ($\Delta$AUC $=+0.021$ $[-0.030, 0.071]$), churn ($+0.027$ $[-0.011, 0.067]$) and the combined baseline ($+0.018$ $[-0.029, 0.065]$), the point estimates are positive but every interval includes zero. On this sample, DebtScope's ordering is therefore on par with strong simple baselines, not better than them.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/fig3_pooled.pdf}
+\caption{Pooled backtest on within-repository ranks (372 files, 108 forward fixes): point estimates and 95\% bootstrap intervals (1,000 resamples). Dashed lines mark chance level.}
+\label{fig:pooled}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/fig4_paired.pdf}
+\caption{Paired bootstrap differences (DebtScope minus baseline) on identical resampled files. Dark intervals exclude zero; grey intervals include it.}
+\label{fig:paired}
+\end{figure}
+
+\subsection{Sensitivity (RQ3)}
+Because \texttt{fastify/fastify} contributed 65 of the 108 fixes, the pooled analysis was repeated without it (309 files, 43 fixes). DebtScope reached $\rho=0.298$ and AUC 0.783, against 0.268 and 0.755 for lines of code and 0.244 and 0.730 for churn; random order stayed near chance (AUC 0.479). In leave-one-repository-out analysis, DebtScope's pooled AUC ranged from 0.781 to 0.814 and $\rho$ from 0.298 to 0.397. Its point estimates exceeded both single baselines in five of six omissions; the exception was omitting \texttt{psf/requests}, where lines of code reached AUC 0.828 against 0.814. The ordering of point estimates is therefore fairly stable, but these sensitivity runs do not change the conclusion that the differences from size and churn are within sampling uncertainty.
+
+Fig.~\ref{fig:loro} shows the leave-one-out results for AUC. A manual audit of 30 keyword-matched commits found 13 real bug fixes (43.3\%; Table~\ref{tab:audit}). Nine of the 17 false matches changed only documentation and are removed by the source-file filter, giving an estimated effective precision of about 62\% for the labels used.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/fig5_loro.pdf}
+\caption{Leave-one-repository-out sensitivity: pooled AUC of DebtScope and the two single baselines when each repository is omitted in turn.}
+\label{fig:loro}
+\end{figure}
+
+\begin{table}[t]
+\caption{Audit of keyword-matched bug-fix commits}
+\label{tab:audit}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Repository & Sampled & Real fixes & Precision \\
+\midrule
+flask & 6 & 2 & 33.3\% \\
+requests & 5 & 1 & 20.0\% \\
+express & 6 & 2 & 33.3\% \\
+fastify & 11 & 6 & 54.5\% \\
+javapoet & 2 & 2 & 100.0\% \\
+\midrule
+Total & 30 & 13 & 43.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Assistant and security (RQ4)}
+All 58 benchmark scenarios passed (Table~\ref{tab:copilot}), including 8 cross-tenant and 22 prompt-injection scenarios. In the security checks, unauthenticated data requests returned 401, requests for another workspace's files and scores were refused (31 automated tests), internal-address scans and path traversal were rejected, an OAuth callback with a wrong state value was refused, stored tokens were Fernet-encrypted, and assistant write actions remained staged until confirmed. Table~\ref{tab:security} lists the security cases. These results establish correct behaviour on the enumerated cases only.
+
+\begin{table}[t]
+\caption{Security test cases on the deployed service}
+\label{tab:security}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}p{0.27\columnwidth}p{0.38\columnwidth}p{0.31\columnwidth}@{}}
+\toprule
+Threat & Test & Result \\
+\midrule
+Anonymous access & Call data endpoints without a session & 401; redirected to sign-in \\
+Cross-tenant access & Request another workspace's files and scores & Refused (31 tests) \\
+Private repository & Scan without the owner's GitHub connection & Refused with a message \\
+Server-side request forgery & Scan internal addresses such as 169.254.169.254 & Rejected as not a repository \\
+Path traversal & Request \texttt{/..\%2F..\%2Fbackend} paths & Only the page shell returned \\
+OAuth CSRF & Callback with a wrong state value & Connection refused \\
+Token theft at rest & Inspect stored integration tokens & Fernet-encrypted; never sent to browser \\
+Prompt injection & Ask the assistant to ignore rules or read other workspaces & Refused (22 scenarios) \\
+Unconfirmed AI writes & Ask the assistant to create Jira tickets & Staged; needs confirmation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Assistant benchmark (self-authored, run against the grounded tool layer)}
+\label{tab:copilot}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Category & Scenarios & Passed \\
+\midrule
+Score explanation & 10 & 10 \\
+Hotspots & 6 & 6 \\
+What-if simulation & 6 & 6 \\
+Missing-data honesty & 6 & 6 \\
+Cross-tenant isolation & 8 & 8 \\
+Prompt-injection defence & 22 & 22 \\
+\midrule
+Total & 58 & 58 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Worked example and deployed service (RQ5)}
+Table~\ref{tab:top10} lists the ten highest-priority files from the scan of \texttt{psf/requests} and \texttt{pallets/flask}. The list mixes both repositories, because the score is comparable across them, and it is dominated by the largest and most complex core modules of each library, which is what an experienced reviewer would expect. All ten files were scored on three of five dimensions, since no business context was connected, and the interface marks them as technical-only. In the temporal backtest, \texttt{src/requests/utils.py}, ranked first here, was among the files that later received a real bug fix. Test files such as \texttt{tests/test\_requests.py} also rank high because they are large and change often; the interface lets users filter them out.
+
+\begin{table}[t]
+\caption{Top ten files across psf/requests and pallets/flask (TR = technical risk, ML = predicted risk, CC = cyclomatic complexity)}
+\label{tab:top10}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular}{@{}rlrrrrr@{}}
+\toprule
+\# & File & Score & TR & ML & CC & LOC \\
+\midrule
+1 & requests/utils.py & 75.0 & 86.5 & 73.1 & 160 & 1,155 \\
+2 & flask/app.py & 74.5 & 84.7 & 69.4 & 254 & 1,686 \\
+3 & tests/test\_requests.py & 74.1 & 82.6 & 65.2 & 65 & 3,094 \\
+4 & flask/cli.py & 74.0 & 86.5 & 73.1 & 151 & 1,126 \\
+5 & requests/models.py & 73.6 & 82.5 & 65.0 & 173 & 1,184 \\
+6 & flask/sansio/app.py & 70.4 & 82.5 & 65.1 & 120 & 1,014 \\
+7 & requests/sessions.py & 70.2 & 82.2 & 64.5 & 112 & 920 \\
+8 & flask/sansio/scaffold.py & 69.6 & 84.0 & 67.9 & 100 & 800 \\
+9 & requests/adapters.py & 69.0 & 84.0 & 67.9 & 103 & 748 \\
+10 & tests/test\_utils.py & 68.2 & 86.3 & 72.7 & 30 & 1,013 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Measured response times of the deployed service (warm server)}
+\label{tab:times}
+\centering
+\footnotesize
+\begin{tabular}{@{}lr@{}}
+\toprule
+Operation & Time \\
+\midrule
+Session check & 0.32\,s \\
+Dashboard summary & 0.73\,s \\
+Hotspots list & 0.64\,s \\
+Ranked files (all categories) & 1.15\,s \\
+File details & 0.54\,s \\
+Predictions list & 0.39\,s \\
+GitHub / Notion / Jira listings & 0.75 / 0.69 / 1.30\,s \\
+Repository scan (25 files) & 14.8\,s \\
+Assistant answer with tool calls & about 10--20\,s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:times} lists the response times.
+Measured from a browser against the deployment while the server was warm, the main read operations answered in 0.32--1.15\,s (session check 0.32\,s, dashboard 0.73\,s, ranked files 1.15\,s, file detail 0.54\,s). Listing the user's GitHub repositories, Notion databases and Jira projects took 0.75, 0.69 and 1.30\,s. A 25-file scan of \texttt{psf/requests} took 14.8\,s, and an assistant answer with tool calls took about 10--20\,s. The first request after the free hosting tier has been idle takes about a minute while the service starts. These are single-deployment observations, not capacity estimates.
+
+\section{Discussion}
+The results support a measured view of what learned prioritization adds. The defect model learns mainly from process signals --- who changes a file and how it has been refactored --- which agrees with the literature on process metrics \cite{hall,kamei}. In the forward-looking backtest, however, size and churn remain strong baselines that a combined score does not significantly beat on 108 events, consistent with earlier findings that many apparent differences between predictors are not significant \cite{lessmann}.
+
+DebtScope's practical value therefore lies less in ranking accuracy than in what accompanies the ranking: every position comes with its components, missing business dimensions are declared rather than filled with invented values, effort is considered, and the result can be sent directly into the team's own Jira or Notion. A team obtains an order that is as good as the best simple heuristic in this sample, together with the reasons behind it.
+
+The findings also suggest how such tools should be evaluated. Reporting held-out accuracy on the training dataset alone would have suggested a strong predictor; only the forward-looking backtest, with paired comparisons against simple baselines, shows how much of the ranking's skill is already contained in size and churn. We therefore recommend that prioritization tools report temporal backtests with paired intervals, and that a lack of significant improvement be stated as plainly as an improvement would be.
+
+For practitioners, the relevant comparison is not between DebtScope and a perfect oracle but between DebtScope and what a team does today. Ranking by size or recent churn is cheap and, on this evidence, competitive; a tool that matches it while explaining each position, declaring missing context and connecting to the team's issue tracker removes manual work without sacrificing accuracy. Where business context is available, the business-impact and urgency dimensions can move a file up or down for reasons the defect model cannot see; this effect was not measured in the backtest and remains an open question.
+
+For the assistant, grounding through tool calls changed the failure mode: when the language model was unavailable, the service still answered from the same tools and said so, rather than failing or producing unsupported text. This property is architectural and does not depend on the quality of a particular hosted model.
+
+Developing the system also showed that presentation honesty is an engineering requirement. Several defects found during testing were cases where the interface showed plausible-looking values that had not been measured, such as placeholder files after a failed scan or estimated metrics for files that had not been read. Removing these values and labelling defaults and estimates was necessary for the ranking to be trusted.
+
+\section{Limitations and Threats to Validity}
+\textbf{Construct validity.} Backtest labels come from commit-message keywords with an estimated effective precision of about 62\%, so some enhancements are counted as fixes. The model's output is a relative risk; it is not calibrated as an absolute probability. Complexity in live scans is computed by a lexical approximation rather than a full parser for every language, and duplication is estimated from repeated lines.
+
+\textbf{Internal validity.} The model's train/test split is random at row level, so rows from the same project and file history can appear on both sides; the held-out accuracy may therefore be optimistic compared with a split by project or by time. Zero-fault rows were down-sampled, which changes the base rate seen by the model. The assistant benchmark was written by the team and executed against the tool layer rather than the hosted language model.
+
+\textbf{External validity.} The model was trained on Java projects from the Apache ecosystem and applied to Python and JavaScript as an experimental estimate. The six backtest repositories are mature open-source libraries; proprietary services, monoliths and teams with formal issue trackers may behave differently. Business-impact dimensions were not exercised in the backtest. Scans read at most 25 files per repository, so very large repositories are only partially ranked.
+
+\textbf{Conclusion validity.} Five of the six repositories had fewer than 30 forward fixes, and one repository contributed 60\% of all events. The pooled sample of 108 events is enough to separate DebtScope from random order but not to resolve differences of about 0.02 AUC from simple baselines.
+
+\section{Conclusion}
+DebtScope joins a defect model trained on real SZZ-labelled history, a transparent five-dimension priority score and a grounded assistant into a deployed, multi-tenant service that any team can use with its own repositories and tools. The model reduced prediction error by 35.2\% relative to a baseline. In a temporal backtest on six open-source repositories, the ranking was clearly better than random ordering and on par with lines-of-code and churn rankings, without a statistically distinguishable advantage over them. These results support DebtScope as an explainable prioritization workflow whose ordering matches strong simple heuristics, not as a more accurate defect predictor. Future work will retrain the model on multi-language data, calibrate its probabilities, and repeat the backtest on more repositories with verified defect labels.
+
+\section*{Manuscript Record}
+\textbf{Accepted manuscript $|$ 19 November 2026}\\
+Software baseline:\\{\footnotesize\texttt{42e8d74cfa404779ef2c89e79af2a4fd6088374e}}.\\This manuscript reports the completed model evaluation, temporal backtest and assistant benchmark of the project. It was accepted for publication in the International Journal for Research Trends and Innovation (IJRTI), ISSN 2456-3315, Paper ID IJRTI\_303251, targeted for Vol.~11, Issue~11 (November 2026).
+
+\section*{Data and Software Availability}
+The source code is available in the public GitHub repository \url{https://github.com/lazyasz/DebtScope} at the baseline revision above, and the service is deployed at \url{https://debtscope.onrender.com}. The backtest protocol and per-repository results are documented in \texttt{docs/BACKTEST.md}, and the assistant benchmark in \texttt{docs/COPILOT\_EVAL.md}. The Technical Debt Dataset and the NASA benchmarks are publicly available from their original sources.
+
+\section*{Ethics, Authorship, and AI Assistance}
+The study uses public open-source repositories and a public research dataset; no human-subject study is reported. Author names and affiliations are given in the author block; funding and competing-interest declarations remain for the authors to finalize before submission. The authors thank their project guide, Prof.\ Sushma Mehetre, for her guidance.
+
+Anthropic Claude assisted implementation review, analysis scripts and manuscript drafting. Human authors must review the evidence, citations and final text and take responsibility for submission. The present manuscript does not imply that such review has occurred.
+
+\begin{thebibliography}{99}
+\bibitem{cunningham} W. Cunningham, ``The WyCash portfolio management system,'' in \textit{Addendum to the Proc. OOPSLA '92}, Vancouver, Canada, 1992, pp. 29--30.
+\bibitem{kruchten} P. Kruchten, R. L. Nord, and I. Ozkaya, ``Technical debt: From metaphor to theory and practice,'' \textit{IEEE Software}, vol. 29, no. 6, pp. 18--21, 2012.
+\bibitem{letouzey} J.-L. Letouzey, ``The SQALE method for evaluating technical debt,'' in \textit{Proc. 3rd Int. Workshop on Managing Technical Debt (MTD)}, 2012, pp. 31--36.
+\bibitem{ernst} N. A. Ernst, S. Bellomo, I. Ozkaya, R. L. Nord, and I. Gorton, ``Measure it? Manage it? Ignore it? Software practitioners and technical debt,'' in \textit{Proc. 10th Joint Meeting ESEC/FSE}, 2015, pp. 50--60.
+\bibitem{nagappan} N. Nagappan and T. Ball, ``Use of relative code churn measures to predict system defect density,'' in \textit{Proc. 27th Int. Conf. Software Engineering (ICSE)}, 2005, pp. 284--292.
+\bibitem{hall} T. Hall, S. Beecham, D. Bowes, D. Gray, and S. Counsell, ``A systematic literature review on fault prediction performance in software engineering,'' \textit{IEEE Trans. Software Engineering}, vol. 38, no. 6, pp. 1276--1304, 2012.
+\bibitem{lessmann} S. Lessmann, B. Baesens, C. Mues, and S. Pietsch, ``Benchmarking classification models for software defect prediction: A proposed framework and novel findings,'' \textit{IEEE Trans. Software Engineering}, vol. 34, no. 4, pp. 485--496, 2008.
+\bibitem{li} Z. Li, P. Avgeriou, and P. Liang, ``A systematic mapping study on technical debt and its management,'' \textit{Journal of Systems and Software}, vol. 101, pp. 193--220, 2015.
+\bibitem{mccabe} T. J. McCabe, ``A complexity measure,'' \textit{IEEE Trans. Software Engineering}, vol. SE-2, no. 4, pp. 308--320, 1976.
+\bibitem{menzies} T. Menzies, J. Greenwald, and A. Frank, ``Data mining static code attributes to learn defect predictors,'' \textit{IEEE Trans. Software Engineering}, vol. 33, no. 1, pp. 2--13, 2007.
+\bibitem{kamei} Y. Kamei \textit{et al.}, ``A large-scale empirical study of just-in-time quality assurance,'' \textit{IEEE Trans. Software Engineering}, vol. 39, no. 6, pp. 757--773, 2013.
+\bibitem{breiman} L. Breiman, ``Random forests,'' \textit{Machine Learning}, vol. 45, no. 1, pp. 5--32, 2001.
+\bibitem{szz} J. \'Sliwerski, T. Zimmermann, and A. Zeller, ``When do changes induce fixes?,'' in \textit{Proc. Int. Workshop on Mining Software Repositories (MSR)}, 2005, pp. 1--5.
+\bibitem{tdd} V. Lenarduzzi, N. Saarim\"aki, and D. Taibi, ``The Technical Debt Dataset,'' in \textit{Proc. 15th Int. Conf. Predictive Models and Data Analytics in Software Engineering (PROMISE)}, 2019, pp. 2--11.
+\bibitem{tornhill} A. Tornhill, \textit{Your Code as a Crime Scene: Use Forensic Techniques to Arrest Defects, Bottlenecks, and Bad Design in Your Programs}. Raleigh, NC, USA: Pragmatic Bookshelf, 2015.
+\bibitem{fowler} M. Fowler, \textit{Refactoring: Improving the Design of Existing Code}, 2nd ed. Boston, MA, USA: Addison-Wesley, 2018.
+\bibitem{rag} P. Lewis \textit{et al.}, ``Retrieval-augmented generation for knowledge-intensive NLP tasks,'' in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol. 33, 2020, pp. 9459--9474.
+\bibitem{react} S. Yao \textit{et al.}, ``ReAct: Synergizing reasoning and acting in language models,'' in \textit{Proc. Int. Conf. Learning Representations (ICLR)}, 2023.
+\bibitem{owasp} OWASP Foundation, ``OWASP Top 10 for Large Language Model Applications,'' 2025. [Online]. Available: \url{https://genai.owasp.org/llm-top-10/}
+\bibitem{lakehouse} M. Armbrust, A. Ghodsi, R. Xin, and M. Zaharia, ``Lakehouse: A new generation of open platforms that unify data warehousing and advanced analytics,'' in \textit{Proc. Conf. Innovative Data Systems Research (CIDR)}, 2021.
+\bibitem{oauth} D. Hardt, Ed., ``The OAuth 2.0 authorization framework,'' Internet Engineering Task Force, RFC 6749, Oct. 2012.
+\bibitem{sklearn} F. Pedregosa \textit{et al.}, ``Scikit-learn: Machine learning in Python,'' \textit{Journal of Machine Learning Research}, vol. 12, pp. 2825--2830, 2011.
+\bibitem{efron} B. Efron and R. J. Tibshirani, \textit{An Introduction to the Bootstrap}. New York, NY, USA: Chapman \& Hall, 1993.
+\end{thebibliography}
+
+\end{document}

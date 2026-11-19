@@ -205,8 +205,8 @@ export default function CopilotShell() {
   const renderMessageContent = (text) => {
     if (!text) return null;
 
-    // Replace citation format with interactive chip
-    const parts = text.split(/(\[file:[^\]]+\]|\[metric:[^\]]+\])/g);
+    // Replace citation format with interactive chip (bold markers around a chip would show as stray **)
+    const parts = text.replace(/\*\*(\[(?:file|metric):[^\]]+\])\*\*/g, '$1').split(/(\[file:[^\]]+\]|\[metric:[^\]]+\])/g);
 
     return parts.map((part, i) => {
       if (part.startsWith('[file:') && part.endsWith(']')) {

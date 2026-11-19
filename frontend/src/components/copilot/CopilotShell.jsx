@@ -234,9 +234,35 @@ export default function CopilotShell() {
           </span>
         );
       }
-      return <span key={i}>{part}</span>;
+      return <span key={i}>{renderMarkdown(part)}</span>;
     });
   };
+
+  // Light markdown for answers: headings, **bold**, `code`, _italic_; formula marks like $w_{TR}$ become plain w_TR
+  const renderInline = (line, keyBase) =>
+    line
+      .replace(/\$([^$]+)\$/g, (_, m) => m.replace(/[{}]/g, ''))
+      .split(/(\*\*[^*]+\*\*|`[^`]+`|\b_[^_]+_\b)/g)
+      .map((seg, j) => {
+        const k = `${keyBase}-${j}`;
+        if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) return <strong key={k}>{seg.slice(2, -2)}</strong>;
+        if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2)
+          return <code key={k} className="px-1 rounded bg-[#f1f3f6] font-mono text-[0.85em]">{seg.slice(1, -1)}</code>;
+        if (seg.startsWith('_') && seg.endsWith('_') && seg.length > 2) return <em key={k}>{seg.slice(1, -1)}</em>;
+        return seg;
+      });
+
+  const renderMarkdown = (text) =>
+    text.split('\n').map((line, i, all) => {
+      const h = line.match(/^#{1,6}\s+(.*)$/);
+      const content = h ? <strong className="block mt-2">{renderInline(h[1], i)}</strong> : renderInline(line, i);
+      return (
+        <span key={i}>
+          {content}
+          {i < all.length - 1 && !h ? '\n' : null}
+        </span>
+      );
+    });
 
   return (
     <div className="flex flex-col h-[calc(100vh-13rem)] bg-white rounded-2xl border border-[#e2e4ea] shadow-2xs overflow-hidden">

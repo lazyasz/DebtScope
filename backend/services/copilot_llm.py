@@ -424,8 +424,8 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
 
         # Use Google Gemini REST streaming API
         base = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
-        # Lite answers in seconds; the bigger model is the fallback (it is often overloaded on the free tier)
-        models = list(dict.fromkeys([settings.GEMINI_MODEL, "gemini-flash-latest"]))
+        # Lite answers in seconds; the others are fallbacks (the bigger flash model is often overloaded on the free tier)
+        models = list(dict.fromkeys([settings.GEMINI_MODEL, "gemini-3.1-flash-lite", "gemini-flash-latest"]))
         # Key in a header, not the URL, so it never shows up in logs or exception messages
         headers = {"Content-Type": "application/json", "x-goog-api-key": self.api_key}
 
@@ -451,7 +451,8 @@ class GeminiCopilotAdapter(BaseCopilotLLM):
             "tools": gemini_tools,
         }
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
+        # A tool round on the free tier takes 7-9 s; 12 s was too tight and pushed every answer to the fallback
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
             try:
                 # Up to 4 rounds: Gemini may ask for tool data before it can answer
                 for _ in range(4):
